@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Manga Calendar Ultimate (Auto Save)</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary: #8e44ad;
+            --secondary: #2c3e50;
+            --bg: #f4f6f8;
+            --white: #ffffff;
+            --danger: #c0392b;
+            --success: #27ae60;
+            --readtoon: #2ecc71;
+        }
+
+        * { box-sizing: border-box; }
+        body { font-family: 'Sarabun', sans-serif; margin: 0; background-color: var(--bg); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* --- Page Navigation --- */
+        .page-nav {
+            background-color: var(--secondary); color: white; padding: 10px 15px;
+            display: flex; align-items: center; justify-content: space-between;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2); z-index: 100;
+        }
+        .page-controls { display: flex; gap: 10px; align-items: center; }
+        .page-select { padding: 5px; border-radius: 4px; border: none; font-family: 'Sarabun'; cursor: pointer; }
+        .nav-btn {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); 
+            color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer;
+        }
+        .nav-btn.danger:hover { background: var(--danger); }
+
+        /* --- Layout --- */
+        .container { flex: 1; display: flex; overflow: hidden; position: relative; }
+        
+        /* Sidebar */
+        .sidebar {
+            width: 320px; background: var(--white); border-right: 1px solid #ddd;
+            display: flex; flex-direction: column; padding: 15px; z-index: 50;
+            transition: transform 0.3s ease; overflow-y: auto;
+        }
+        .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 40; display: none; }
+        .mobile-toggle { display: none; background: none; border: none; color: white; font-size: 1.2rem; cursor: pointer; margin-right: 10px; }
+
+        /* Main View */
+        .main-view { flex: 1; padding: 15px; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+        /* Input Groups */
+        .input-group {
+            background: #f8f9fa; border: 1px solid #e9ecef; border-left: 4px solid #ccc;
+            padding: 10px; border-radius: 6px; margin-bottom: 15px;
+        }
+        .group-label { font-weight: 800; font-size: 0.85rem; color: #555; display: block; margin-bottom: 8px; text-transform: uppercase; }
+        .row { display: flex; gap: 5px; margin-bottom: 5px; }
+        input, select { width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: 'Sarabun'; }
+        input[type="color"] { width: 40px; padding: 0; border: none; height: 38px; cursor: pointer; }
+        
+        .btn { width: 100%; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
+        .btn-create { background: var(--success); }
+        .btn-add { background: var(--primary); }
+        .btn-del { background: var(--danger); width: auto; padding: 0 10px; }
+
+        /* Cloud Status */
+        .settings-box { border-top: 1px solid #eee; padding-top: 15px; margin-top: auto; }
+        .cloud-status { font-size: 0.8rem; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; color: #666; }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .dot.online { background: var(--success); }
+
+        /* --- Calendar & Events --- */
+        #calendar { background: white; padding: 10px; border-radius: 10px; flex: 1; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        
+        .fc-event { 
+            cursor: pointer; border: none !important; margin-top: 4px !important; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: transform 0.1s;
+        }
+        .fc-event:hover { transform: scale(1.02); z-index: 100; }
+        
+        .event-card {
+            padding: 6px 10px; min-height: 28px; border-radius: 6px; 
+            font-size: 0.9rem; font-weight: 600; color: white;
+            display: flex; justify-content: space-between; align-items: center; overflow: hidden;
+        }
+        .event-card.read { opacity: 0.6; text-decoration: line-through; filter: grayscale(50%); }
+        .event-check { 
+            background: rgba(0,0,0,0.2); border-radius: 50%; width: 22px; height: 22px; 
+            display: flex; align-items: center; justify-content: center; font-size: 0.75rem; margin-left: 8px; z-index: 10; 
+        }
+        .event-check:hover { background: rgba(255,255,255,0.5); transform: scale(1.1); }
+
+        /* --- Expanding Card --- */
+        #expandedCard {
+            display: none; position: absolute; background: white; border-radius: 12px; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4); border: 1px solid #eee; z-index: 5000;
+            width: 300px; padding: 20px; flex-direction: column; gap: 12px;
+            animation: expandAnim 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); transform-origin: top left;
+        }
+        @keyframes expandAnim { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+        .expand-title { font-size: 1.6rem; font-weight: 800; color: #333; line-height: 1.2; word-wrap: break-word; }
+        .expand-subtitle { font-size: 1rem; color: #666; font-weight: 600; margin-bottom: 10px; }
+
+        .expand-btn {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            padding: 12px; border-radius: 8px; text-decoration: none; color: white;
+            font-weight: bold; font-size: 1rem; border: none; cursor: pointer;
+            transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .expand-btn:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.2); }
+        .bg-link { background: #3498db; } .bg-rt { background: var(--readtoon); } .bg-del { background: var(--danger); }
+
+        #expandOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 4999; background: rgba(0,0,0,0.05); }
+
+        /* Add Modal */
+        #addModal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.6); z-index: 3000; align-items: center; justify-content: center;
+        }
+        .modal-box { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 320px; }
+        .modal-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; }
+
+        /* --- 🔥 Custom Toast CSS --- */
+        .toast-notification {
+            position: fixed; bottom: 20px; right: 20px;
+            background-color: var(--success); color: white;
+            padding: 12px 24px; border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            z-index: 9999; opacity: 0; transform: translateY(20px);
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.27, 1.55);
+            display: flex; align-items: center; gap: 10px;
+            font-family: 'Sarabun', sans-serif; font-weight: 600; font-size: 1rem;
+        }
+        .toast-notification.show { opacity: 1; transform: translateY(0); }
+        .toast-notification i { font-size: 1.2rem; }
+
+        @media (max-width: 768px) {
+            .mobile-toggle { display: block; }
+            .sidebar { position: fixed; left: -100%; height: 100%; width: 85%; }
+            .sidebar.active { left: 0; } .sidebar-overlay.active { display: block; }
+            #expandedCard {
+                position: fixed !important; top: 50% !important; left: 50% !important;
+                transform: translate(-50%, -50%) !important; width: 90%; max-width: 320px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="expandOverlay" onclick="closeExpandedCard()"></div>
+    <div id="expandedCard">
+        <div id="expTitle" class="expand-title">Title</div>
+        <div id="expSubtitle" class="expand-subtitle">Chapter info</div>
+        <a id="expBtnOrig" href="#" target="_blank" class="expand-btn bg-link"><i class="fa-solid fa-link"></i> เว็บต้นฉบับ</a>
+        <a id="expBtnRT" href="#" target="_blank" class="expand-btn bg-rt"><i class="fa-solid fa-book-open"></i> ReadToon</a>
+        <button id="expBtnDel" class="expand-btn bg-del"><i class="fa-solid fa-trash"></i> ลบ</button>
+    </div>
+
+    <div class="page-nav">
+        <div class="page-controls">
+            <button class="mobile-toggle" onclick="toggleSidebar()"><i class="fa-solid fa-bars"></i></button>
+            <span class="page-label">📖 หน้า:</span>
+            <select id="pageSelect" class="page-select" onchange="switchPage()"></select>
+            <button class="nav-btn" onclick="createNewPage()">+</button>
+            <button class="nav-btn" onclick="renamePage()"><i class="fa-solid fa-pen"></i></button>
+            <button class="nav-btn danger" onclick="deletePage()"><i class="fa-solid fa-trash"></i></button>
+        </div>
+        <div>
+            <button class="nav-btn" onclick="document.getElementById('cloudModal').style.display='flex'">☁️ Cloud</button>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+        <div class="sidebar">
+            <div class="input-group" style="border-left-color: var(--success);">
+                <span class="group-label">สร้างเรื่องใหม่ (Series)</span>
+                <div class="row">
+                    <input type="text" id="newSeriesName" placeholder="ชื่อเรื่อง (เช่น One Piece)">
+                    <input type="color" id="newSeriesColor" value="#8e44ad">
+                </div>
+                <div class="row"><input type="text" id="newSeriesOrig" placeholder="🔗 Link เว็บต้นฉบับ"></div>
+                <div class="row"><input type="text" id="newSeriesRT" placeholder="🦊 Link ReadToon"></div>
+                <button class="btn btn-create" onclick="createSeries()">+ สร้างเรื่อง</button>
+            </div>
+
+            <div style="margin-top: 15px; color: #777; font-size: 0.9rem; text-align: center; border: 1px dashed #ccc; padding: 10px; border-radius: 6px;">
+                💡 <b>วิธีเพิ่มตอน:</b> <br>จิ้มที่วันที่ในปฏิทินได้เลย
+            </div>
+
+            <div class="settings-box">
+                <div class="cloud-status"><div class="dot" id="statusDot"></div><span id="statusText">Local Only</span></div>
+            </div>
+        </div>
+
+        <div class="main-view">
+            <div id="calendar"></div>
+        </div>
+    </div>
+
+    <div id="addModal">
+        <div class="modal-box">
+            <div class="modal-title">เพิ่มตอนใหม่ 📅</div>
+            <label style="display:block; margin-bottom:5px;">เลือกเรื่อง:</label>
+            <select id="addSeriesSelect" style="width:100%; margin-bottom:10px; padding:10px;"></select>
+            
+            <label style="display:block; margin-bottom:5px;">ตอนที่:</label>
+            <input type="text" id="addEpNum" placeholder="เช่น 105" style="width:100%; margin-bottom:15px; padding:10px;">
+            
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-add" onclick="confirmAddEvent()">บันทึก</button>
+                <button class="btn" style="background:#ddd; color:#333;" onclick="document.getElementById('addModal').style.display='none'">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="cloudModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:6000; align-items:center; justify-content:center;">
+        <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:400px;">
+            <h3>☁️ ตั้งค่า Cloud Sync</h3>
+            <input type="text" id="cfgBinId" placeholder="Bin ID" style="width:100%; margin-bottom:10px; padding:8px;">
+            <input type="password" id="cfgApiKey" placeholder="API Key" style="width:100%; margin-bottom:15px; padding:8px;">
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-create" onclick="saveCloudConfig()">เชื่อมต่อ</button>
+                <button class="btn" style="background:#ddd; color:#333;" onclick="document.getElementById('cloudModal').style.display='none'">ปิด</button>
+            </div>
+            <button class="btn" style="background:#333; margin-top:10px;" onclick="forceSync()">📥 ดึงข้อมูล</button>
+        </div>
+    </div>
+
+    <script>
+        let pages = JSON.parse(localStorage.getItem('pages')) || [{id:'p1', name:'หน้าหลัก'}];
+        let series = JSON.parse(localStorage.getItem('series')) || [];
+        let events = JSON.parse(localStorage.getItem('events')) || [];
+        let currentPageId = localStorage.getItem('currentPageId') || 'p1';
+        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig')) || { binId: '', apiKey: '' };
+        let calendar;
+        let selectedEventId = null;
+        let selectedDate = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            initCalendar();
+            refreshUI();
+            
+            // --- 🔥 NEW: Auto-Login via URL ---
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramBin = urlParams.get('bin');
+            const paramKey = urlParams.get('key');
+
+            if (paramBin && paramKey) {
+                // อัปเดตตัวแปร Config
+                cloudConfig.binId = paramBin;
+                cloudConfig.apiKey = paramKey;
+                
+                // 🔥 บันทึกลง LocalStorage ทันที!
+                localStorage.setItem('cloudConfig', JSON.stringify(cloudConfig));
+                
+                // ล้าง URL เพื่อความปลอดภัย
+                window.history.replaceState({}, document.title, window.location.pathname);
+                
+                showToast("🔑 รับกุญแจเรียบร้อย! บันทึกลงเครื่องแล้ว...");
+            }
+            
+            // เติมค่าลง Input (ถ้ามี)
+            document.getElementById('cfgBinId').value = cloudConfig.binId;
+            document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
+            
+            // Sync ทันทีถ้ามีค่าครบ
+            if(cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
+        });
+
+        // --- 🔥 New Custom Toast Function ---
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            
+            let icon = '<i class="fa-solid fa-check-circle"></i>';
+            if(type === 'error') {
+                toast.style.backgroundColor = '#c0392b';
+                icon = '<i class="fa-solid fa-circle-exclamation"></i>';
+            }
+            
+            toast.innerHTML = `${icon} ${message}`;
+            document.body.appendChild(toast);
+            
+            requestAnimationFrame(() => toast.classList.add('show'));
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function initCalendar() {
+            let el = document.getElementById('calendar');
+            calendar = new FullCalendar.Calendar(el, {
+                initialView: 'dayGridMonth',
+                locale: 'th',
+                editable: true,
+                headerToolbar: { left: 'prev,next', center: 'title', right: 'today' },
+                events: getFilteredEvents(),
+                dayMaxEvents: 4,
+                dateClick: (info) => {
+                    selectedDate = info.dateStr;
+                    openAddModal();
+                },
+                eventDrop: (info) => {
+                    let e = events.find(x => x.id === info.event.id);
+                    if(e) { e.start = info.event.startStr; saveAll(); showToast('ย้ายวันเรียบร้อย'); }
+                },
+                eventContent: (arg) => {
+                    let props = arg.event.extendedProps;
+                    let readClass = props.isRead ? 'read' : '';
+                    let html = `
+                        <div class="event-card ${readClass}" style="background-color:${arg.event.backgroundColor}">
+                            <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${arg.event.title}</div>
+                            <div class="event-check" onclick="toggleRead(event, '${arg.event.id}')"><i class="fa-solid fa-check"></i></div>
+                        </div>`;
+                    return { html: html };
+                },
+                eventClick: (info) => {
+                    info.jsEvent.preventDefault();
+                    showExpandedCard(info.event, info.el);
+                }
+            });
+            calendar.render();
+        }
+
+        function getFilteredEvents() {
+            return events.filter(e => e.pageId === currentPageId).map(e => {
+                let s = series.find(s => s.id === e.seriesId);
+                return {
+                    id: e.id, title: `${e.title} #${e.chapter}`, start: e.start,
+                    backgroundColor: s ? s.color : '#999',
+                    url: e.link || undefined,
+                    extendedProps: { isRead: e.isRead, seriesName: e.title, originalLink: e.link, seriesId: e.seriesId, chapter: e.chapter }
+                };
+            });
+        }
+
+        function openAddModal() {
+            let sel = document.getElementById('addSeriesSelect');
+            sel.innerHTML = '';
+            let currentSeries = series.filter(s => s.pageId === currentPageId);
+            if(currentSeries.length === 0) { showToast('กรุณาสร้างเรื่องก่อนครับ', 'error'); return; }
+            currentSeries.forEach(s => {
+                let opt = document.createElement('option');
+                opt.value = s.id; opt.textContent = s.name;
+                sel.appendChild(opt);
+            });
+            document.getElementById('addEpNum').value = '';
+            document.getElementById('addModal').style.display = 'flex';
+            document.getElementById('addEpNum').focus();
+        }
+
+        function confirmAddEvent() {
+            let sId = document.getElementById('addSeriesSelect').value;
+            let ep = document.getElementById('addEpNum').value.trim();
+            if(!ep) return showToast('ใส่เลขตอนด้วยครับ', 'error');
+            let sObj = series.find(s => s.id === sId);
+            events.push({
+                id: 'e'+Date.now(), seriesId: sId, title: sObj.name, chapter: ep,
+                start: selectedDate, link: '', isRead: false, pageId: currentPageId
+            });
+            saveAll();
+            document.getElementById('addModal').style.display = 'none';
+            showToast('เพิ่มตอนใหม่แล้ว');
+        }
+
+        function showExpandedCard(calEvent, element) {
+            let props = calEvent.extendedProps;
+            selectedEventId = calEvent.id;
+            let s = series.find(x => x.id === props.seriesId);
+            document.getElementById('expTitle').textContent = props.seriesName;
+            document.getElementById('expSubtitle').textContent = `ตอนที่ ${props.chapter} • ${calEvent.start.toLocaleDateString('th-TH')}`;
+            
+            let btnOrig = document.getElementById('expBtnOrig');
+            let finalOrig = props.originalLink || (s ? s.origLink : '');
+            if(finalOrig) { btnOrig.href = finalOrig; btnOrig.style.display = 'flex'; } 
+            else { btnOrig.style.display = 'none'; }
+
+            let btnRT = document.getElementById('expBtnRT');
+            if(s && s.rtLink) { btnRT.href = s.rtLink; btnRT.innerHTML = '<i class="fa-solid fa-book-open"></i> ไป ReadToon'; }
+            else { 
+                btnRT.href = `https://readtoon.com/?q=${encodeURIComponent(props.seriesName)}`;
+                btnRT.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> ค้นหาใน ReadToon';
+            }
+
+            document.getElementById('expBtnDel').onclick = () => {
+                if(confirm('ลบตอนนี้?')) { deleteEvent(selectedEventId); closeExpandedCard(); }
+            };
+
+            let card = document.getElementById('expandedCard');
+            let overlay = document.getElementById('expandOverlay');
+            if(window.innerWidth > 768) {
+                let rect = element.getBoundingClientRect();
+                let top = rect.top + window.scrollY;
+                let left = rect.left + window.scrollX;
+                if(left + 320 > window.innerWidth) left = window.innerWidth - 340;
+                if(top + 250 > window.innerHeight) top = top - 200;
+                card.style.top = top + 'px';
+                card.style.left = left + 'px';
+                card.style.transform = 'none'; card.style.position = 'absolute';
+            } else { card.style.position = 'fixed'; }
+            card.style.display = 'flex'; overlay.style.display = 'block';
+        }
+
+        function closeExpandedCard() {
+            document.getElementById('expandedCard').style.display = 'none';
+            document.getElementById('expandOverlay').style.display = 'none';
+            selectedEventId = null;
+        }
+
+        function refreshUI() {
+            let pSel = document.getElementById('pageSelect');
+            pSel.innerHTML = '';
+            pages.forEach(p => {
+                let opt = document.createElement('option');
+                opt.value = p.id; opt.textContent = p.name;
+                pSel.appendChild(opt);
+            });
+            pSel.value = currentPageId;
+            if(calendar) { calendar.removeAllEvents(); calendar.addEventSource(getFilteredEvents()); }
+        }
+
+        function switchPage() { currentPageId = document.getElementById('pageSelect').value; localStorage.setItem('currentPageId', currentPageId); refreshUI(); }
+        function createNewPage() { let name = prompt("ชื่อหน้าใหม่:"); if(name) { let id = 'p'+Date.now(); pages.push({id, name}); currentPageId = id; saveAll(); } }
+        function renamePage() { let p = pages.find(p=>p.id===currentPageId); let name=prompt("เปลี่ยนชื่อหน้า:", p.name); if(name){p.name=name; saveAll();} }
+        function deletePage() { if(pages.length<=1)return showToast('ต้องเหลืออย่างน้อย 1 หน้า', 'error'); if(confirm("ลบหน้านี้?")){series=series.filter(s=>s.pageId!==currentPageId); events=events.filter(e=>e.pageId!==currentPageId); pages=pages.filter(p=>p.id!==currentPageId); currentPageId=pages[0].id; saveAll();} }
+
+        function createSeries() {
+            let name = document.getElementById('newSeriesName').value.trim();
+            let color = document.getElementById('newSeriesColor').value;
+            let orig = document.getElementById('newSeriesOrig').value.trim();
+            let rt = document.getElementById('newSeriesRT').value.trim();
+            if(!name) return showToast('ใส่ชื่อเรื่องก่อนครับ', 'error');
+            if(orig && !orig.startsWith('http')) orig = 'https://' + orig;
+            if(rt && !rt.startsWith('http')) rt = 'https://' + rt;
+            let newSeries = { id: 's'+Date.now(), name, color, pageId: currentPageId, origLink: orig, rtLink: rt };
+            series.push(newSeries);
+            document.getElementById('newSeriesName').value = '';
+            document.getElementById('newSeriesOrig').value = '';
+            document.getElementById('newSeriesRT').value = '';
+            saveAll();
+            showToast(`สร้างเรื่อง ${name} แล้ว`);
+        }
+
+        function deleteEvent(id) { events = events.filter(e => e.id !== id); saveAll(); showToast('ลบรายการแล้ว'); }
+        function toggleRead(ev, id) { ev.preventDefault(); ev.stopPropagation(); let e=events.find(x=>x.id===id); if(e){e.isRead=!e.isRead; saveAll();} }
+
+        function saveAll() {
+            localStorage.setItem('pages', JSON.stringify(pages));
+            localStorage.setItem('series', JSON.stringify(series));
+            localStorage.setItem('events', JSON.stringify(events));
+            localStorage.setItem('currentPageId', currentPageId);
+            refreshUI();
+            syncToCloud();
+        }
+
+        function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('active'); document.querySelector('.sidebar-overlay').classList.toggle('active'); }
+        function saveCloudConfig() { cloudConfig.binId=document.getElementById('cfgBinId').value.trim(); cloudConfig.apiKey=document.getElementById('cfgApiKey').value.trim(); localStorage.setItem('cloudConfig', JSON.stringify(cloudConfig)); syncFromCloud(); document.getElementById('cloudModal').style.display='none'; }
+
+        async function syncFromCloud() {
+            if(!cloudConfig.binId || !cloudConfig.apiKey) { showToast("กรุณาใส่ Bin ID และ API Key", "error"); return; }
+            setStatus('syncing', '⏳ กำลังโหลด...');
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}/latest`, { headers: { 'X-Access-Key': cloudConfig.apiKey, 'X-Bin-Meta': 'false' } });
+                if(!res.ok) throw new Error();
+                const d = await res.json();
+                if(d.pages || d.series || d.events) {
+                    pages = d.pages || [{id:'p1', name:'หน้าหลัก'}];
+                    series = d.series || []; events = d.events || [];
+                    let pageExists = pages.find(p => p.id === currentPageId);
+                    if (!pageExists && pages.length > 0) currentPageId = pages[0].id;
+                    saveAllLocal(); setStatus('online', '✅ Online');
+                    showToast(`ดึงข้อมูลสำเร็จ (เรื่อง: ${series.length}, ตอน: ${events.length})`);
+                } else { showToast("ข้อมูลใน Cloud ว่างเปล่า", "error"); }
+            } catch(e) { setStatus('offline', '❌ Error'); showToast("ดึงข้อมูลไม่ได้", "error"); }
+        }
+
+        async function syncToCloud() {
+            if(!cloudConfig.binId) return;
+            setStatus('syncing', '☁️ Saving...');
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, {
+                    method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Access-Key': cloudConfig.apiKey },
+                    body: JSON.stringify({ pages, series, events, updated: new Date() })
+                });
+                setStatus('online', '✅ Saved');
+            } catch(e) { setStatus('offline', '❌ Error'); }
+        }
+
+        function saveAllLocal() {
+            localStorage.setItem('pages', JSON.stringify(pages));
+            localStorage.setItem('series', JSON.stringify(series));
+            localStorage.setItem('events', JSON.stringify(events));
+            localStorage.setItem('currentPageId', currentPageId);
+            refreshUI();
+        }
+
+        function setStatus(cls, txt) { document.getElementById('statusDot').className = 'dot ' + cls; document.getElementById('statusText').textContent = txt; }
+        function forceSync() { syncFromCloud(); }
+    </script>
+</body>
+</html>
