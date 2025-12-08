@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Manga Calendar Ultimate (Auto Save)</title>
+    <title>Manga Calendar Ultimate (Manage Series)</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
@@ -64,9 +64,8 @@
         
         .btn { width: 100%; padding: 10px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
         .btn-create { background: var(--success); }
-        .btn-add { background: var(--primary); }
-        .btn-del { background: var(--danger); width: auto; padding: 0 10px; }
-
+        .btn-manage { background: #f39c12; margin-top: 5px; } /* ปุ่มจัดการเรื่อง */
+        
         /* Cloud Status */
         .settings-box { border-top: 1px solid #eee; padding-top: 15px; margin-top: auto; }
         .cloud-status { font-size: 0.8rem; margin-bottom: 5px; display: flex; align-items: center; gap: 5px; color: #666; }
@@ -117,13 +116,24 @@
 
         #expandOverlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 4999; background: rgba(0,0,0,0.05); }
 
-        /* Add Modal */
-        #addModal {
+        /* --- Modals (Common) --- */
+        .modal-overlay {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
-            background: rgba(0,0,0,0.6); z-index: 3000; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.6); z-index: 6000; align-items: center; justify-content: center;
         }
-        .modal-box { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 320px; }
+        .modal-box { background: white; padding: 20px; border-radius: 10px; width: 90%; max-width: 400px; max-height: 80vh; overflow-y: auto; }
         .modal-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 15px; }
+
+        /* --- Manage Series List --- */
+        .series-list-item {
+            display: flex; align-items: center; justify-content: space-between; gap: 10px;
+            padding: 10px; border-bottom: 1px solid #eee;
+        }
+        .series-list-item:last-child { border-bottom: none; }
+        .series-color-picker { width: 30px; height: 30px; border: none; padding: 0; cursor: pointer; }
+        .series-name-display { flex: 1; font-weight: bold; }
+        .btn-icon-del { background: none; border: none; color: #ccc; cursor: pointer; font-size: 1.1rem; }
+        .btn-icon-del:hover { color: var(--danger); }
 
         /* --- 🔥 Custom Toast CSS --- */
         .toast-notification {
@@ -188,6 +198,7 @@
                 <div class="row"><input type="text" id="newSeriesOrig" placeholder="🔗 Link เว็บต้นฉบับ"></div>
                 <div class="row"><input type="text" id="newSeriesRT" placeholder="🦊 Link ReadToon"></div>
                 <button class="btn btn-create" onclick="createSeries()">+ สร้างเรื่อง</button>
+                <button class="btn btn-manage" onclick="openManageSeriesModal()"><i class="fa-solid fa-list-check"></i> จัดการ/ลบ/เปลี่ยนสีเรื่อง</button>
             </div>
 
             <div style="margin-top: 15px; color: #777; font-size: 0.9rem; text-align: center; border: 1px dashed #ccc; padding: 10px; border-radius: 6px;">
@@ -204,7 +215,7 @@
         </div>
     </div>
 
-    <div id="addModal">
+    <div id="addModal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title">เพิ่มตอนใหม่ 📅</div>
             <label style="display:block; margin-bottom:5px;">เลือกเรื่อง:</label>
@@ -220,8 +231,17 @@
         </div>
     </div>
 
-    <div id="cloudModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:6000; align-items:center; justify-content:center;">
-        <div style="background:white; padding:20px; border-radius:8px; width:90%; max-width:400px;">
+    <div id="manageSeriesModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">จัดการรายชื่อเรื่อง 🎨🗑️</div>
+            <div id="seriesListContainer" style="max-height: 300px; overflow-y: auto; margin-bottom: 15px;">
+                </div>
+            <button class="btn" style="background:#ddd; color:#333;" onclick="document.getElementById('manageSeriesModal').style.display='none'">ปิด</button>
+        </div>
+    </div>
+
+    <div id="cloudModal" class="modal-overlay">
+        <div class="modal-box">
             <h3>☁️ ตั้งค่า Cloud Sync</h3>
             <input type="text" id="cfgBinId" placeholder="Bin ID" style="width:100%; margin-bottom:10px; padding:8px;">
             <input type="password" id="cfgApiKey" placeholder="API Key" style="width:100%; margin-bottom:15px; padding:8px;">
@@ -247,47 +267,35 @@
             initCalendar();
             refreshUI();
             
-            // --- 🔥 NEW: Auto-Login via URL ---
+            // Auto-Login Logic
             const urlParams = new URLSearchParams(window.location.search);
             const paramBin = urlParams.get('bin');
             const paramKey = urlParams.get('key');
 
             if (paramBin && paramKey) {
-                // อัปเดตตัวแปร Config
                 cloudConfig.binId = paramBin;
                 cloudConfig.apiKey = paramKey;
-                
-                // 🔥 บันทึกลง LocalStorage ทันที!
                 localStorage.setItem('cloudConfig', JSON.stringify(cloudConfig));
-                
-                // ล้าง URL เพื่อความปลอดภัย
                 window.history.replaceState({}, document.title, window.location.pathname);
-                
                 showToast("🔑 รับกุญแจเรียบร้อย! บันทึกลงเครื่องแล้ว...");
             }
             
-            // เติมค่าลง Input (ถ้ามี)
             document.getElementById('cfgBinId').value = cloudConfig.binId;
             document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
-            
-            // Sync ทันทีถ้ามีค่าครบ
             if(cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
         });
 
-        // --- 🔥 New Custom Toast Function ---
+        // Toast Function
         function showToast(message, type = 'success') {
             const toast = document.createElement('div');
             toast.className = 'toast-notification';
-            
             let icon = '<i class="fa-solid fa-check-circle"></i>';
             if(type === 'error') {
                 toast.style.backgroundColor = '#c0392b';
                 icon = '<i class="fa-solid fa-circle-exclamation"></i>';
             }
-            
             toast.innerHTML = `${icon} ${message}`;
             document.body.appendChild(toast);
-            
             requestAnimationFrame(() => toast.classList.add('show'));
             setTimeout(() => {
                 toast.classList.remove('show');
@@ -295,6 +303,7 @@
             }, 3000);
         }
 
+        // Calendar Init
         function initCalendar() {
             let el = document.getElementById('calendar');
             calendar = new FullCalendar.Calendar(el, {
@@ -342,6 +351,51 @@
             });
         }
 
+        // --- MANAGE SERIES LOGIC (NEW) ---
+        function openManageSeriesModal() {
+            let container = document.getElementById('seriesListContainer');
+            container.innerHTML = '';
+            
+            let currentSeries = series.filter(s => s.pageId === currentPageId);
+            
+            if (currentSeries.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#999;">ไม่มีรายชื่อเรื่องในหน้านี้</p>';
+            } else {
+                currentSeries.forEach(s => {
+                    let div = document.createElement('div');
+                    div.className = 'series-list-item';
+                    div.innerHTML = `
+                        <input type="color" class="series-color-picker" value="${s.color}" onchange="updateSeriesColor('${s.id}', this.value)">
+                        <div class="series-name-display">${s.name}</div>
+                        <button class="btn-icon-del" onclick="deleteSeriesById('${s.id}')" title="ลบเรื่องนี้"><i class="fa-solid fa-trash"></i></button>
+                    `;
+                    container.appendChild(div);
+                });
+            }
+            
+            document.getElementById('manageSeriesModal').style.display = 'flex';
+        }
+
+        function updateSeriesColor(id, newColor) {
+            let s = series.find(x => x.id === id);
+            if (s) {
+                s.color = newColor;
+                saveAll(); // บันทึกและรีเฟรชปฏิทิน
+                // ไม่ต้อง showToast เพราะสีเปลี่ยนให้เห็นชัดเจนอยู่แล้ว
+            }
+        }
+
+        function deleteSeriesById(id) {
+            if (confirm("⚠️ ต้องการลบเรื่องนี้และตอนทั้งหมดในปฏิทินทิ้งหรือไม่?")) {
+                series = series.filter(s => s.id !== id);
+                events = events.filter(e => e.seriesId !== id);
+                saveAll();
+                openManageSeriesModal(); // รีเฟรชรายการใน Modal
+                showToast("ลบเรื่องเรียบร้อย", "error");
+            }
+        }
+
+        // --- Other Logics ---
         function openAddModal() {
             let sel = document.getElementById('addSeriesSelect');
             sel.innerHTML = '';
