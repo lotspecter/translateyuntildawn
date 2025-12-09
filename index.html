@@ -433,6 +433,19 @@
             gap: 30px;
         }
 
+        /* --- 🎬 Card Entry Animation --- */
+        @keyframes cardAppear {
+            0% {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+
+            100% {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
         /* --- Card --- */
         .manga-card {
             background: #12081f;
@@ -446,6 +459,7 @@
             flex-direction: column;
             height: 100%;
             position: relative;
+            animation: cardAppear 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
         }
 
         .manga-card:hover {
@@ -857,18 +871,30 @@
             gridOngoing.innerHTML = '';
             gridCompleted.innerHTML = '';
 
+            let ongoingCount = 0;
+            let completedCount = 0;
+
             data.forEach(item => {
                 let badgeHtml = '';
                 let isCompleted = false;
+                let delay = 0;
 
                 if (item.status.includes('end') || item.status.includes('จบ')) {
                     badgeHtml = `<div class="status-badge status-end"><i class="fa-solid fa-check-circle"></i> จบแล้ว ${item.chapter} ตอน</div>`;
                     isCompleted = true;
+                    delay = completedCount * 0.05;
+                    completedCount++;
                 } else if (item.status.includes('update') || item.status.includes('อัพเดท')) {
                     badgeHtml = `<div class="status-badge status-catchup"><i class="fa-solid fa-bolt"></i> ชนต้นฉบับตอนที่ ${item.chapter}</div>`;
+                    delay = ongoingCount * 0.05;
+                    ongoingCount++;
                 } else {
                     badgeHtml = `<div class="status-badge status-normal"><i class="fa-solid fa-clock"></i> อัพเดทถึงตอนที่ ${item.chapter}</div>`;
+                    delay = ongoingCount * 0.05;
+                    ongoingCount++;
                 }
+
+                if (delay > 1.5) delay = 1.5;
 
                 let buttonsHtml = '';
                 if (item.links.length === 0) {
@@ -900,7 +926,7 @@
                 }
 
                 const cardHtml = `
-                    <div class="manga-card" onclick="toggleCard(this)">
+                    <div class="manga-card" onclick="toggleCard(this)" style="animation-delay: ${delay}s">
                         <div class="card-header"><div class="manga-title">${item.title}</div></div>
                         <div class="img-wrapper">
                             <img src="${item.image}" alt="${item.title}" loading="lazy">
