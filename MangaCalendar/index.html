@@ -607,7 +607,7 @@
         let series = JSON.parse(localStorage.getItem('series')) || [];
         let events = JSON.parse(localStorage.getItem('events')) || [];
         let currentPageId = localStorage.getItem('currentPageId') || 'p1';
-        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig')) || { binId: '', apiKey: '' };
+        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig_MangaCalendar')) || { binId: '', apiKey: '' };
         let calendar;
         let selectedEventId = null;
         let selectedDate = null;
@@ -866,7 +866,7 @@
         }
 
         function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('active'); document.querySelector('.sidebar-overlay').classList.toggle('active'); }
-        function saveCloudConfig() { cloudConfig.binId = document.getElementById('cfgBinId').value.trim(); cloudConfig.apiKey = document.getElementById('cfgApiKey').value.trim(); localStorage.setItem('cloudConfig', JSON.stringify(cloudConfig)); syncFromCloud(); document.getElementById('cloudModal').style.display = 'none'; }
+        function saveCloudConfig() { cloudConfig.binId = document.getElementById('cfgBinId').value.trim(); cloudConfig.apiKey = document.getElementById('cfgApiKey').value.trim(); localStorage.setItem('cloudConfig_MangaCalendar', JSON.stringify(cloudConfig)); syncFromCloud(); document.getElementById('cloudModal').style.display = 'none'; }
 
         async function syncFromCloud() {
             if (!cloudConfig.binId || !cloudConfig.apiKey) { showToast("กรุณาใส่ Bin ID และ API Key", "error"); return; }
@@ -882,7 +882,11 @@
                     if (!pageExists && pages.length > 0) currentPageId = pages[0].id;
                     saveAllLocal(); setStatus('online', '✅ Online');
                     showToast(`ดึงข้อมูลสำเร็จ (เรื่อง: ${series.length}, ตอน: ${events.length})`);
-                } else { showToast("ข้อมูลใน Cloud ว่างเปล่า", "error"); }
+                } else {
+                    console.log("Cloud empty, syncing local to cloud...");
+                    showToast("Cloud ว่างเปล่า: กำลังเริ่มระบบ Cloud...", "success");
+                    syncToCloud();
+                }
             } catch (e) { setStatus('offline', '❌ Error'); showToast("ดึงข้อมูลไม่ได้", "error"); }
         }
 
