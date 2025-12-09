@@ -250,6 +250,8 @@
             justify-content: space-between;
             align-items: center;
             overflow: hidden;
+            border-left: 5px solid transparent;
+            /* Prepare for assignee color */
         }
 
         .event-card.read {
@@ -317,20 +319,32 @@
             font-size: 1rem;
             color: #666;
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 5px;
+        }
+
+        .expand-assignee {
+            font-size: 0.95rem;
+            color: #333;
+            font-weight: bold;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
         }
 
         .expand-btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 12px;
+            gap: 6px;
+            padding: 8px 12px;
+            /* Reduced padding */
             border-radius: 8px;
             text-decoration: none;
             color: white;
             font-weight: bold;
-            font-size: 1rem;
+            font-size: 0.9rem;
+            /* Reduced font size */
             border: none;
             cursor: pointer;
             transition: 0.2s;
@@ -494,7 +508,21 @@
                 max-width: 320px;
             }
         }
+
+        .assignee-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+        }
     </style>
+
+
+
 </head>
 
 <body>
@@ -503,6 +531,7 @@
     <div id="expandedCard">
         <div id="expTitle" class="expand-title">Title</div>
         <div id="expSubtitle" class="expand-subtitle">Chapter info</div>
+        <div id="expAssignee" class="expand-assignee"></div>
         <a id="expBtnOrig" href="#" target="_blank" class="expand-btn bg-link"><i class="fa-solid fa-link"></i>
             เว็บต้นฉบับ</a>
         <a id="expBtnRT" href="#" target="_blank" class="expand-btn bg-rt"><i class="fa-solid fa-book-open"></i>
@@ -547,6 +576,16 @@
                 💡 <b>วิธีเพิ่มตอน:</b> <br>จิ้มที่วันที่ในปฏิทินได้เลย
             </div>
 
+            <div class="input-group" style="margin-top: 15px; border-left-color: #3498db;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <span class="group-label" style="margin:0;">👥 ผู้รับผิดชอบ</span>
+                    <button class="nav-btn"
+                        style="background:var(--success); border:none; width:24px; height:24px; font-size: 0.8rem; display:flex; align-items:center; justify-content:center; border-radius:50%;"
+                        onclick="addAssignee()"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div id="assigneeList" style="max-height: 200px; overflow-y: auto;"></div>
+            </div>
+
             <div class="settings-box">
                 <div class="cloud-status">
                     <div class="dot" id="statusDot"></div><span id="statusText">Local Only</span>
@@ -557,6 +596,8 @@
         <div class="main-view">
             <div id="calendar"></div>
         </div>
+
+
     </div>
 
     <div id="addModal" class="modal-overlay">
@@ -565,9 +606,13 @@
             <label style="display:block; margin-bottom:5px;">เลือกเรื่อง:</label>
             <select id="addSeriesSelect" style="width:100%; margin-bottom:10px; padding:10px;"></select>
 
-            <label style="display:block; margin-bottom:5px;">ตอนที่:</label>
             <input type="text" id="addEpNum" placeholder="เช่น 105"
                 style="width:100%; margin-bottom:15px; padding:10px;">
+
+            <label style="display:block; margin-bottom:5px;">ผู้รับผิดชอบ:</label>
+            <select id="addAssigneeSelect" style="width:100%; margin-bottom:15px; padding:10px;">
+                <option value="">-- ไม่ระบุ --</option>
+            </select>
 
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-add" onclick="confirmAddEvent()">บันทึก</button>
@@ -606,6 +651,7 @@
         let pages = JSON.parse(localStorage.getItem('pages')) || [{ id: 'p1', name: 'หน้าหลัก' }];
         let series = JSON.parse(localStorage.getItem('series')) || [];
         let events = JSON.parse(localStorage.getItem('events')) || [];
+        let assignees = JSON.parse(localStorage.getItem('assignees')) || [];
         let currentPageId = localStorage.getItem('currentPageId') || 'p1';
         let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig_MangaCalendar')) || { binId: '', apiKey: '' };
         let calendar;
@@ -632,6 +678,7 @@
             document.getElementById('cfgBinId').value = cloudConfig.binId;
             document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
             if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
+            renderAssignees();
         });
 
         // Toast Function
@@ -674,8 +721,9 @@
                 eventContent: (arg) => {
                     let props = arg.event.extendedProps;
                     let readClass = props.isRead ? 'read' : '';
+                    let borderColor = props.assigneeColor || 'transparent'; // Get color
                     let html = `
-                        <div class="event-card ${readClass}" style="background-color:${arg.event.backgroundColor}">
+                        <div class="event-card ${readClass}" style="background-color:${arg.event.backgroundColor}; border-left-color:${borderColor};"> <!-- Apply border color -->
                             <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${arg.event.title}</div>
                             <div class="event-check" onclick="toggleRead(event, '${arg.event.id}')"><i class="fa-solid fa-check"></i></div>
                         </div>`;
@@ -692,13 +740,62 @@
         function getFilteredEvents() {
             return events.filter(e => e.pageId === currentPageId).map(e => {
                 let s = series.find(s => s.id === e.seriesId);
+                let assignee = assignees.find(a => a.id === e.assigneeId);
+                let title = `${e.title} #${e.chapter}`;
+                // Removed assignee name from title to keep it clean, relying on the strip and detail view
+                // if (assignee) title += ` (${assignee.name})`; 
                 return {
-                    id: e.id, title: `${e.title} #${e.chapter}`, start: e.start,
+                    id: e.id, title: title, start: e.start,
                     backgroundColor: s ? s.color : '#999',
                     url: e.link || undefined,
-                    extendedProps: { isRead: e.isRead, seriesName: e.title, originalLink: e.link, seriesId: e.seriesId, chapter: e.chapter }
+                    extendedProps: {
+                        isRead: e.isRead,
+                        seriesName: e.title,
+                        originalLink: e.link,
+                        seriesId: e.seriesId,
+                        chapter: e.chapter,
+                        assigneeId: e.assigneeId,
+                        assigneeName: assignee ? assignee.name : '',
+                        assigneeColor: assignee ? assignee.color : 'transparent'
+                    }
                 };
             });
+        }
+
+        // --- ASSIGNEE LOGIC ---
+        function renderAssignees() {
+            let el = document.getElementById('assigneeList');
+            el.innerHTML = '';
+            assignees.forEach(a => {
+                let div = document.createElement('div');
+                div.className = 'assignee-item';
+                div.innerHTML = `
+                    <input type="color" class="series-color-picker" style="margin-right:8px; width:20px; height:20px;" value="${a.color || '#333333'}" onchange="updateAssigneeColor('${a.id}', this.value)">
+                    <span style="flex:1;">${a.name}</span> 
+                    <button class="btn-icon-del" onclick="deleteAssignee('${a.id}')"><i class="fa-solid fa-trash"></i></button>
+                `;
+                el.appendChild(div);
+            });
+        }
+
+        function addAssignee() {
+            let name = prompt("ชื่อผู้รับผิดชอบงาน:");
+            if (name) {
+                assignees.push({ id: 'a' + Date.now(), name, color: '#2ecc71' }); // Default green-ish
+                saveAll();
+            }
+        }
+
+        function updateAssigneeColor(id, color) {
+            let a = assignees.find(x => x.id === id);
+            if (a) { a.color = color; saveAll(); }
+        }
+
+        function deleteAssignee(id) {
+            if (confirm("ต้องการลบรายชื่อนี้?")) {
+                assignees = assignees.filter(a => a.id !== id);
+                saveAll();
+            }
         }
 
         // --- MANAGE SERIES LOGIC (NEW) ---
@@ -756,6 +853,15 @@
                 opt.value = s.id; opt.textContent = s.name;
                 sel.appendChild(opt);
             });
+
+            let selAss = document.getElementById('addAssigneeSelect');
+            selAss.innerHTML = '<option value="">-- ไม่ระบุ --</option>';
+            assignees.forEach(a => {
+                let opt = document.createElement('option');
+                opt.value = a.id; opt.textContent = a.name;
+                selAss.appendChild(opt);
+            });
+
             document.getElementById('addEpNum').value = '';
             document.getElementById('addModal').style.display = 'flex';
             document.getElementById('addEpNum').focus();
@@ -764,11 +870,13 @@
         function confirmAddEvent() {
             let sId = document.getElementById('addSeriesSelect').value;
             let ep = document.getElementById('addEpNum').value.trim();
+            let assignId = document.getElementById('addAssigneeSelect').value;
+
             if (!ep) return showToast('ใส่เลขตอนด้วยครับ', 'error');
             let sObj = series.find(s => s.id === sId);
             events.push({
                 id: 'e' + Date.now(), seriesId: sId, title: sObj.name, chapter: ep,
-                start: selectedDate, link: '', isRead: false, pageId: currentPageId
+                start: selectedDate, link: '', isRead: false, pageId: currentPageId, assigneeId: assignId
             });
             saveAll();
             document.getElementById('addModal').style.display = 'none';
@@ -781,6 +889,14 @@
             let s = series.find(x => x.id === props.seriesId);
             document.getElementById('expTitle').textContent = props.seriesName;
             document.getElementById('expSubtitle').textContent = `ตอนที่ ${props.chapter} • ${calEvent.start.toLocaleDateString('th-TH')}`;
+
+            let assignEl = document.getElementById('expAssignee');
+            if (props.assigneeName) {
+                assignEl.style.display = 'flex';
+                assignEl.innerHTML = `<span style="display:inline-block; width:10px; height:10px; background:${props.assigneeColor}; border-radius:50%; margin-right:5px;"></span> ${props.assigneeName}`;
+            } else {
+                assignEl.style.display = 'none';
+            }
 
             let btnOrig = document.getElementById('expBtnOrig');
             let finalOrig = props.originalLink || (s ? s.origLink : '');
@@ -860,8 +976,10 @@
             localStorage.setItem('pages', JSON.stringify(pages));
             localStorage.setItem('series', JSON.stringify(series));
             localStorage.setItem('events', JSON.stringify(events));
+            localStorage.setItem('assignees', JSON.stringify(assignees));
             localStorage.setItem('currentPageId', currentPageId);
             refreshUI();
+            renderAssignees();
             syncToCloud();
         }
 
@@ -877,7 +995,7 @@
                 const d = await res.json();
                 if (d.pages || d.series || d.events) {
                     pages = d.pages || [{ id: 'p1', name: 'หน้าหลัก' }];
-                    series = d.series || []; events = d.events || [];
+                    series = d.series || []; events = d.events || []; assignees = d.assignees || [];
                     let pageExists = pages.find(p => p.id === currentPageId);
                     if (!pageExists && pages.length > 0) currentPageId = pages[0].id;
                     saveAllLocal(); setStatus('online', '✅ Online');
@@ -896,7 +1014,7 @@
             try {
                 await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, {
                     method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Access-Key': cloudConfig.apiKey },
-                    body: JSON.stringify({ pages, series, events, updated: new Date() })
+                    body: JSON.stringify({ pages, series, events, assignees, updated: new Date() })
                 });
                 setStatus('online', '✅ Saved');
             } catch (e) { setStatus('offline', '❌ Error'); }
@@ -906,8 +1024,10 @@
             localStorage.setItem('pages', JSON.stringify(pages));
             localStorage.setItem('series', JSON.stringify(series));
             localStorage.setItem('events', JSON.stringify(events));
+            localStorage.setItem('assignees', JSON.stringify(assignees));
             localStorage.setItem('currentPageId', currentPageId);
             refreshUI();
+            renderAssignees();
         }
 
         function setStatus(cls, txt) { document.getElementById('statusDot').className = 'dot ' + cls; document.getElementById('statusText').textContent = txt; }
