@@ -567,13 +567,16 @@
                 <div class="row"><input type="text" id="newSeriesOrig" placeholder="🔗 Link เว็บต้นฉบับ"></div>
                 <div class="row"><input type="text" id="newSeriesRT" placeholder="🦊 Link ReadToon"></div>
                 <button class="btn btn-create" onclick="createSeries()">+ สร้างเรื่อง</button>
+                <!--
                 <button class="btn btn-manage" onclick="openManageSeriesModal()"><i class="fa-solid fa-list-check"></i>
                     จัดการ/ลบ/เปลี่ยนสีเรื่อง</button>
+                -->
             </div>
 
-            <div
-                style="margin-top: 15px; color: #777; font-size: 0.9rem; text-align: center; border: 1px dashed #ccc; padding: 10px; border-radius: 6px;">
-                💡 <b>วิธีเพิ่มตอน:</b> <br>จิ้มที่วันที่ในปฏิทินได้เลย
+            <div class="input-group"
+                style="margin-top: 15px; border-left-color: #f39c12; flex:1; display:flex; flex-direction:column; overflow:hidden;">
+                <span class="group-label">📚 รายชื่อเรื่อง (Series)</span>
+                <div id="sidebarSeriesList" style="flex:1; overflow-y: auto; padding-right:5px;"></div>
             </div>
 
             <div class="input-group" style="margin-top: 15px; border-left-color: #3498db;">
@@ -799,12 +802,66 @@
         }
 
         // --- MANAGE SERIES LOGIC (NEW) ---
-        function openManageSeriesModal() {
-            let container = document.getElementById('seriesListContainer');
+        // --- MANAGE SERIES LOGIC (NEW) ---
+        function renderSidebarSeriesList() {
+            let container = document.getElementById('sidebarSeriesList');
+            if (!container) return;
             container.innerHTML = '';
-
             let currentSeries = series.filter(s => s.pageId === currentPageId);
 
+            if (currentSeries.length === 0) {
+                container.innerHTML = '<p style="text-align:center; color:#999; font-size:0.8rem;">ยังไม่มีรายชื่อเรื่อง</p>';
+                return;
+            }
+
+            currentSeries.forEach(s => {
+                let div = document.createElement('div');
+                div.style.borderBottom = '1px solid #eee';
+                div.style.padding = '8px 0';
+                div.style.fontSize = '0.9rem';
+
+                // Name & Color
+                let topRow = document.createElement('div');
+                topRow.style.display = 'flex';
+                topRow.style.alignItems = 'center';
+                topRow.style.gap = '8px';
+                topRow.style.marginBottom = '6px';
+                topRow.innerHTML = `
+                    <input type="color" value="${s.color}" onchange="updateSeriesColor('${s.id}', this.value)" style="width:24px; height:24px; border:none; padding:0; cursor:pointer;">
+                    <span style="font-weight:bold; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${s.name}">${s.name}</span>
+                `;
+
+                // Actions
+                let actionRow = document.createElement('div');
+                actionRow.style.display = 'flex';
+                actionRow.style.gap = '5px';
+
+                let btnStyle = `flex:1; padding:4px; font-size:0.75rem; border-radius:4px; text-decoration:none; text-align:center; color:white; display:flex; align-items:center; justify-content:center; gap:4px;`;
+
+                let origBtn = s.origLink ? `<a href="${s.origLink}" target="_blank" style="${btnStyle} background:#3498db;"><i class="fa-solid fa-link"></i> ต้นฉบับ</a>`
+                    : `<span style="${btnStyle} background:#ddd; color:#999; cursor:default;"><i class="fa-solid fa-link"></i></span>`;
+
+                let rtBtn = s.rtLink ? `<a href="${s.rtLink}" target="_blank" style="${btnStyle} background:var(--readtoon);"><i class="fa-solid fa-book-open"></i> ReadToon</a>`
+                    : `<span style="${btnStyle} background:#ddd; color:#999; cursor:default;"><i class="fa-solid fa-book-open"></i></span>`;
+
+                let delBtn = `<button onclick="deleteSeriesById('${s.id}')" style="${btnStyle} background:var(--danger); border:none; cursor:pointer; max-width:40px;"><i class="fa-solid fa-trash"></i></button>`;
+
+                actionRow.innerHTML = `${origBtn} ${rtBtn} ${delBtn}`;
+
+                div.appendChild(topRow);
+                div.appendChild(actionRow);
+                container.appendChild(div);
+            });
+        }
+
+        function openManageSeriesModal() {
+            // Keep this for compatibility or remove if not needed. 
+            // The sidebar now shows the list, but let's keep the logic just in case the button is still used.
+            // Actually, let's just make it call renderSidebarSeriesList() if we wanted to sync, but the modal has its own container.
+            // ... original modal logic ...
+            let container = document.getElementById('seriesListContainer');
+            container.innerHTML = '';
+            let currentSeries = series.filter(s => s.pageId === currentPageId);
             if (currentSeries.length === 0) {
                 container.innerHTML = '<p style="text-align:center; color:#999;">ไม่มีรายชื่อเรื่องในหน้านี้</p>';
             } else {
@@ -819,7 +876,6 @@
                     container.appendChild(div);
                 });
             }
-
             document.getElementById('manageSeriesModal').style.display = 'flex';
         }
 
@@ -945,6 +1001,7 @@
             });
             pSel.value = currentPageId;
             if (calendar) { calendar.removeAllEvents(); calendar.addEventSource(getFilteredEvents()); }
+            renderSidebarSeriesList();
         }
 
         function switchPage() { currentPageId = document.getElementById('pageSelect').value; localStorage.setItem('currentPageId', currentPageId); refreshUI(); }
