@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="th">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manga Board Ultimate (Protected)</title>
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #2c3e50;
+            --col-bg: #ecf0f1;
+            --text-color: #000000;
+            --page-nav-bg: #34495e;
+            --unpaid-color: #e74c3c;
+            --paid-color: #27ae60;
+            --font-main: 'Sarabun', sans-serif;
+        }
+
+        body {
+            font-family: var(--font-main);
+            background-color: var(--bg-color);
+            margin: 0;
+            padding: 0;
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            box-sizing: border-box;
+        }
+
+        /* --- Page Navigation --- */
+        .page-nav {
+            background-color: var(--page-nav-bg);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .page-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .page-label {
+            font-weight: bold;
+            font-size: 1.1rem;
+            margin-right: 10px;
+            color: #f1c40f;
+        }
+
+        /* --- Main Content --- */
+        .main-content {
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+        }
+
+        header {
+            color: white;
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            flex-shrink: 0;
+        }
+
+        .control-panel {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+
+        .input-group {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 10px 15px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .group-label {
+            color: #ecf0f1;
+            font-weight: bold;
+            font-size: 0.85rem;
+            margin-right: 5px;
+            opacity: 0.9;
+            text-transform: uppercase;
+        }
+
+        .input-text {
+            color: #ddd;
+            font-size: 0.9rem;
+        }
+
+        input,
+        select {
+            padding: 8px;
+            border-radius: 4px;
+            border: none;
+            outline: none;
+            font-family: var(--font-main);
+        }
+
+        select {
+            min-width: 150px;
+            cursor: pointer;
+            background-color: #fff;
+        }
+
+        input[type="color"] {
+            border: none;
+            width: 40px;
+            height: 35px;
+            cursor: pointer;
+            padding: 0;
+            background: none;
+        }
+
+        button {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-family: var(--font-main);
+        }
+
+        .btn-green {
+            background-color: #27ae60;
+            color: white;
+        }
+
+        .btn-green:hover {
+            background-color: #2ecc71;
+        }
+
+        .btn-blue {
+            background-color: #2980b9;
+            color: white;
+        }
+
+        .btn-orange {
+            background-color: #e67e22;
+            color: white;
+        }
+
+        .btn-red {
+            background-color: #c0392b;
+            color: white;
+        }
+
+        .btn-dark {
+            background-color: #2c3e50;
+            color: white;
+            border: 1px solid #7f8c8d;
+        }
+
+        .btn-cloud {
+            background-color: #8e44ad;
+            color: white;
+        }
+
+        /* --- Board Layout --- */
+        .board {
+            display: flex;
+            gap: 20px;
+            flex: 1;
+            overflow-x: auto;
+            padding-bottom: 10px;
+            min-height: 0;
+            /* Important for flex child scroll */
+        }
+
+        .column {
+            background-color: var(--col-bg);
+            border-radius: 8px;
+            min-width: 300px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            max-height: 100%;
+        }
+
+        .column-header {
+            font-size: 1.2rem;
+            font-weight: bold;
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-left: 15px;
+            padding-right: 15px;
+            flex-shrink: 0;
+        }
+
+        .column-header.unpaid {
+            background-color: var(--unpaid-color);
+        }
+
+        .column-header.paid {
+            background-color: var(--paid-color);
+        }
+
+        .task-count {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.9rem;
+        }
+
+        .task-container {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+
+        /* --- Sticky Note Styles --- */
+        .note {
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+            cursor: grab;
+            position: relative;
+            transition: transform 0.2s, filter 0.2s;
+            color: black;
+            border-left: 8px solid #ccc;
+            background: white;
+        }
+
+        .note.paid {
+            opacity: 0.9;
+            background: #f0fdf4;
+            border: 2px solid #27ae60 !important;
+        }
+
+        /* Paid items struck */
+        .note.paid h3,
+        .note.paid .price-tag,
+        .note.paid .job-checks {
+            text-decoration: line-through;
+            color: #c0392b !important;
+        }
+
+        .note:hover {
+            filter: brightness(95%);
+        }
+
+        .note:active {
+            cursor: grabbing;
+            transform: rotate(2deg) scale(1.02);
+            z-index: 100;
+        }
+
+        .note h3 {
+            margin: 0;
+            font-size: 1.05rem;
+            color: black;
+            font-weight: 800;
+            pointer-events: none;
+        }
+
+        .note-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 8px;
+        }
+
+        .column.drag-over {
+            background-color: #dcdde1;
+            border: 2px dashed #7f8c8d;
+        }
+
+        .assignee-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 12px;
+            color: white;
+            font-size: 0.95rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        .job-checks {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 8px;
+            background: #fdfdfd;
+            padding: 5px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+        }
+
+        .check-box {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.85rem;
+            cursor: pointer;
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+
+        .check-box.checked {
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        .price-tag {
+            font-weight: 800;
+            color: #2c3e50;
+            text-align: right;
+            font-size: 1.1rem;
+            margin-top: 5px;
+        }
+
+        .payer-tag {
+            margin-top: 8px;
+            font-size: 0.85rem;
+            background: #ecf0f1;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            color: #5865F2;
+            /* Discord Blue */
+            cursor: pointer;
+            font-size: 1rem;
+            padding: 4px;
+            margin-left: 5px;
+            border-radius: 4px;
+        }
+
+        .btn-icon:hover {
+            background-color: #5865F2;
+            color: white;
+        }
+
+        .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #eba4a4;
+            color: #c0392b;
+            font-weight: bold;
+            font-size: 1rem;
+            cursor: pointer;
+            z-index: 50;
+        }
+
+        .delete-btn:hover {
+            background: #fee;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        /* --- Modals --- */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            z-index: 6000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-box {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow-y: auto;
+            color: #333;
+        }
+
+        .modal-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background-color: #27ae60;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+            z-index: 9999;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .toast-notification.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- TOP BAR -->
+    <div class="page-nav">
+        <div class="page-controls">
+            <span class="page-label">📖 หน้างาน:</span>
+            <select id="pageSelect" onchange="switchPage()"
+                style="font-size: 1rem; font-weight: bold; padding: 5px 10px;"></select>
+            <button class="btn-dark" onclick="createNewPage()">+ สร้าง</button>
+            <button class="btn-dark" onclick="renameCurrentPage()">✏️</button>
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button class="btn-dark" onclick="openPayerModal()">💳 คนจ่าย (Code)</button>
+            <button class="btn-dark" onclick="openAssigneeModal()">👥 ผู้รับผิดชอบ</button>
+            <button class="btn-cloud" onclick="document.getElementById('cloudModal').style.display='flex'">☁️
+                Cloud</button>
+            <button class="btn-blue" onclick="saveToJSON()">💾 Backup</button>
+            <button class="btn-orange" onclick="document.getElementById('fileInput').click()">📂 Load</button>
+            <button class="btn-red" onclick="resetAllData()">⚠️ Reset</button>
+            <input type="file" id="fileInput" style="display: none;" onchange="loadFromJSON(this)">
+        </div>
+    </div>
+
+    <!-- Cloud Modal -->
+    <div id="cloudModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">☁️ ตั้งค่า Cloud & Webhook</div>
+            <input type="text" id="cfgBinId" placeholder="Bin ID (JSONBin)"
+                style="width:100%; margin-bottom:10px; padding:8px; box-sizing:border-box;">
+            <input type="password" id="cfgApiKey" placeholder="API Key"
+                style="width:100%; margin-bottom:10px; padding:8px; box-sizing:border-box;">
+
+            <label style="display:block; margin-top:10px; font-weight:bold; font-size:0.9rem;">Webhook
+                (งานใหม่/ยังไม่จ่าย):</label>
+            <input type="text" id="cfgWebhookUnpaid" placeholder="Unpaid Webhook URL"
+                style="width:100%; margin-bottom:10px; padding:8px; box-sizing:border-box; background:#fbeeee;">
+
+            <label style="display:block; margin-top:5px; font-weight:bold; font-size:0.9rem;">Webhook
+                (จ่ายแล้ว):</label>
+            <input type="text" id="cfgWebhookPaid" placeholder="Paid Webhook URL"
+                style="width:100%; margin-bottom:15px; padding:8px; box-sizing:border-box; background:#eefbf3;">
+
+            <div style="display:flex; gap:10px;">
+                <button class="btn-green" onclick="saveCloudConfig()">บันทึก & เชื่อมต่อ</button>
+                <button class="btn-dark"
+                    onclick="document.getElementById('cloudModal').style.display='none'">ปิด</button>
+            </div>
+            <button class="btn-blue" style="margin-top:10px; width:100%; justify-content:center;"
+                onclick="forceSync()">📥 ดึงข้อมูล</button>
+        </div>
+    </div>
+
+    <!-- Assignee Modal -->
+    <div id="assigneeModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">จัดการผู้รับผิดชอบ 👥</div>
+            <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
+                <input type="text" id="newAssigneeName" placeholder="ชื่อ..."
+                    style="width:100%; padding:8px; box-sizing:border-box;">
+                <input type="text" id="newAssigneeDiscord" placeholder="Discord ID (e.g. 123456789)"
+                    style="width:100%; padding:8px; box-sizing:border-box;">
+                <div style="display:flex; gap:5px;">
+                    <input type="color" id="newAssigneeColor" value="#3498db" style="height:35px; width:50px;">
+                    <button class="btn-green" style="flex:1; justify-content:center;"
+                        onclick="addAssignee()">เพิ่ม</button>
+                </div>
+            </div>
+            <div id="assigneeListModal" style="max-height:300px; overflow-y:auto;"></div>
+            <div style="margin-top:10px; text-align:right;">
+                <button class="btn-dark"
+                    onclick="document.getElementById('assigneeModal').style.display='none'">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payer Modal -->
+    <div id="payerModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">จัดการคนจ่ายเงิน 💳 (Secure)</div>
+            <div style="margin-bottom:15px; display:flex; flex-direction:column; gap:5px;">
+                <input type="text" id="newPayerName" placeholder="ชื่อคนจ่าย..."
+                    style="width:100%; padding:8px; box-sizing:border-box;">
+                <input type="text" id="newPayerDiscord" placeholder="Discord ID"
+                    style="width:100%; padding:8px; box-sizing:border-box;">
+                <!-- SECURITY CODE -->
+                <input type="password" id="newPayerCode" placeholder="🔒 ตั้งรหัสผ่าน (Code)"
+                    style="width:100%; padding:8px; box-sizing:border-box; border:1px solid #e74c3c; background:#fff5f5;">
+
+                <button class="btn-green" style="width:100%; justify-content:center;"
+                    onclick="addPayer()">เพิ่ม</button>
+            </div>
+            <div id="payerListModal" style="max-height:300px; overflow-y:auto;"></div>
+            <div style="margin-top:10px; text-align:right;">
+                <button class="btn-dark"
+                    onclick="document.getElementById('payerModal').style.display='none'">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Prompt Modal -->
+    <div id="paymentModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">💸 ยืนยันการจ่ายเงิน</div>
+            <p id="payModalTitle" style="margin-bottom:15px;"></p>
+
+            <label>เลือกคนจ่าย:</label>
+            <select id="paySelectPayer" style="width:100%; margin-bottom:10px; padding:10px;"></select>
+
+            <label>รหัสผ่าน (Code):</label>
+            <input type="password" id="payInputCode" placeholder="ใส่รหัสของคนจ่าย..."
+                style="width:100%; margin-bottom:15px; padding:10px; box-sizing:border-box; border:1px solid #3498db;">
+
+            <div style="display:flex; gap:10px;">
+                <button class="btn-green" onclick="confirmPayment()">ยืนยัน & จ่าย</button>
+                <button class="btn-dark" onclick="cancelPayment()">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary Modal (Integrated & Filtered) -->
+    <div id="summaryModal" class="modal-overlay">
+        <div class="modal-box" style="max-width:700px;">
+            <div class="modal-title">📊 สรุปยอดเงิน (Advanced Filter)</div>
+
+            <div
+                style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:15px; background:#f8f9fa; padding:10px; border-radius:8px;">
+                <div style="flex:1; min-width:120px;">
+                    <small>คนจ่าย (Payer):</small>
+                    <select id="filterSumPayer" style="width:100%;" onchange="renderSummaryTable()">
+                        <option value="ALL">-- ทั้งหมด --</option>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <small>ผู้รับผิดชอบ (Assignee):</small>
+                    <select id="filterSumAssignee" style="width:100%;" onchange="renderSummaryTable()">
+                        <option value="ALL">-- ทั้งหมด --</option>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <small>หน้างาน (Page):</small>
+                    <select id="filterSumPage" style="width:100%;" onchange="renderSummaryTable()">
+                        <option value="ALL">-- ทั้งหมด --</option>
+                    </select>
+                </div>
+                <div style="flex:1; min-width:120px;">
+                    <small>เรื่อง (Project):</small>
+                    <select id="filterSumProject" style="width:100%;" onchange="renderSummaryTable()">
+                        <option value="ALL">-- ทั้งหมด --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="summaryStats" style="display:flex; gap:10px; margin-bottom:10px;">
+                <!-- Auto Generated Stats -->
+            </div>
+
+            <div id="summaryTable" style="max-height:300px; overflow-y:auto; border:1px solid #eee; border-radius:4px;">
+            </div>
+
+            <div style="margin-top:10px; text-align:right;">
+                <button class="btn-dark"
+                    onclick="document.getElementById('summaryModal').style.display='none'">ปิด</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <header>
+            <div class="control-panel">
+                <!-- ZONE 1 -->
+                <div class="input-group" style="border-left: 4px solid #f1c40f;">
+                    <span class="group-label">1. สร้างเรื่อง</span>
+                    <input type="text" id="newProjName" placeholder="ชื่อเรื่อง..." style="width: 120px;">
+                    <input type="color" id="newProjColor" value="#f1c40f">
+                    <button class="btn-green" onclick="createProject()">สร้าง</button>
+                </div>
+                <!-- ZONE 2: Updated Input -->
+                <div class="input-group" style="border-left: 4px solid #3498db;">
+                    <span class="group-label">2. เพิ่มงาน</span>
+                    <select id="projectSelect">
+                        <option value="">-- เลือกเรื่อง --</option>
+                    </select>
+                    <!-- Hide delete project button but keep logic available via console if needed -->
+                    <button class="btn-red" onclick="deleteCurrentProject()" style="padding: 5px 10px;"
+                        title="ซ่อนเรื่อง">🗑️</button>
+
+                    <select id="assigneeSelect" style="width: 110px;">
+                        <option value="">-- ผู้รับผิดชอบ --</option>
+                    </select>
+
+                    <input type="number" id="inputStart" placeholder="เริ่ม" style="width: 50px;">
+                    <span class="input-text">-</span>
+                    <input type="number" id="inputEnd" placeholder="ถึง" style="width: 50px;">
+
+                    <!-- New Checkboxes -->
+                    <div style="display:flex; flex-direction:column; gap:2px; font-size:0.8rem; margin-left:5px;">
+                        <label title="ดูดคลีน 50 บ."><input type="checkbox" id="chkInitClean" checked> ดูดคลีน
+                            50฿</label>
+                        <label title="ลงคำ 30 บ."><input type="checkbox" id="chkInitTypeset"> ลงคำ 30฿</label>
+                    </div>
+                    <label
+                        style="font-size:0.75rem; display:flex; flex-direction:column; align-items:center; margin-left:5px; cursor:pointer;">
+                        <input type="checkbox" id="chkInitWebhook" checked> Auto<br>Dc
+                    </label>
+                    <button class="btn-green" onclick="addNote()">+</button>
+                </div>
+                <!-- ZONE 3 -->
+                <div class="input-group" style="border-left: 4px solid #9b59b6; flex-grow: 1;">
+                    <span class="group-label">3. มุมมอง</span>
+                    <select id="filterSelect" onchange="updateFilter()">
+                        <option value="ALL">📂 เรื่อง: ทั้งหมด</option>
+                    </select>
+                    <select id="filterAssignee" onchange="updateFilter()" style="margin-left:5px;">
+                        <option value="ALL">👤 คน: ทั้งหมด</option>
+                    </select>
+
+                    <button class="btn-blue" onclick="openSummaryModal()" style="margin-left:auto;">📊
+                        สรุปยอดเงิน</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="board">
+            <!-- Unpaid Column -->
+            <div class="column" id="unpaid" ondrop="drop(event)" ondragover="allowDrop(event)"
+                ondragleave="leaveDrop(event)">
+                <div class="column-header unpaid">
+                    <span>❌ ยังไม่จ่าย (Unpaid)</span> <span class="task-count" id="cnt-unpaid">0</span>
+                    <button class="btn-dark" style="font-size:0.7rem; margin-left:auto;"
+                        onclick="toggleSort('unpaid')">Sort ↕️</button>
+                </div>
+                <div class="task-container" id="container-unpaid"></div>
+            </div>
+
+            <!-- To Pay Column (New) -->
+            <div class="column" id="topay" ondrop="drop(event)" ondragover="allowDrop(event)"
+                ondragleave="leaveDrop(event)">
+                <div class="column-header" style="background-color:#f39c12;">
+                    <span>⚠️ รอจ่าย (To Pay)</span> <span class="task-count" id="cnt-topay">0</span>
+                    <button class="btn-dark" style="font-size:0.7rem; margin-left:auto;"
+                        onclick="toggleSort('topay')">Sort ↕️</button>
+                </div>
+                <div class="task-container" id="container-topay"></div>
+            </div>
+
+            <!-- Paid Column -->
+            <div class="column" id="paid" ondrop="drop(event)" ondragover="allowDrop(event)"
+                ondragleave="leaveDrop(event)">
+                <div class="column-header paid">
+                    <span>✅ จ่ายแล้ว (Paid)</span>
+                    <div style="display:flex; align-items:center; gap:5px; margin-left:auto;">
+                        <span class="task-count" id="cnt-paid">0</span>
+                    </div>
+                </div>
+                <div class="task-container" id="container-paid"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Data Structures
+        let pages = [], projects = [], tasks = [], assignees = [], payers = [], currentPageId = '';
+        let cloudConfig = { binId: '', apiKey: '', webhookUnpaid: '', webhookPaid: '' };
+        const STORAGE_KEY = 'mangaTracker_V5_Ultimate';
+
+        // Globals -> Added topay sort state
+        let sortState = { unpaid: 'default', topay: 'default', paid: 'default' };
+        let currentFilterProj = 'ALL';
+        let draggedTaskId = null;
+        let dragTargetCol = null;
+
+        // Catch global errors
+        window.onerror = function (msg, url, line, col, error) {
+            alert("Error detected: " + msg + "\nPlease text developer.");
+            return false;
+        };
+
+        window.onload = function () {
+            try {
+                loadData();
+            } catch (e) {
+                alert("Critical Error Loading Data: " + e.message);
+                console.error(e);
+            }
+        };
+
+        function loadData() {
+            const rawData = localStorage.getItem(STORAGE_KEY);
+            if (rawData) {
+                try {
+                    const data = JSON.parse(rawData);
+                    pages = data.pages || [];
+                    projects = data.projects || [];
+                    tasks = data.tasks || [];
+                    assignees = data.assignees || [];
+                    payers = data.payers || [];
+                    currentPageId = data.currentPageId || (pages[0] ? pages[0].id : '');
+                    cloudConfig = data.cloudConfig || { binId: '', apiKey: '', webhookUnpaid: '', webhookPaid: '' };
+                } catch (e) {
+                    console.error("JSON Parse Error", e);
+                    // Fallback init
+                }
+            }
+
+            if (pages.length === 0) {
+                const defId = 'page_' + Date.now();
+                pages = [{ id: defId, name: 'หน้าหลัก' }];
+                currentPageId = defId;
+            }
+
+            // Safety Checks
+            if (!Array.isArray(tasks)) tasks = [];
+            if (!Array.isArray(assignees)) assignees = [];
+            if (!Array.isArray(payers)) payers = [];
+
+            tasks.forEach(t => {
+                if (!t.createdAt) t.createdAt = new Date().toISOString();
+                if (!t.job) t.job = { clean: false, typeset: false };
+                if (!t.payerId) t.payerId = '';
+                // Ensure existing tasks have a status that fits the new workflow
+                if (!t.status) t.status = 'unpaid'; // Default old tasks to unpaid
+                if (t.status === 'unpaid' && t.payerId) t.status = 'topay'; // If it has a payerId but is unpaid, it should be 'to pay'
+            });
+
+            payers.forEach(p => { if (!p.code) p.code = ''; });
+
+            // Init Config UI
+            const elBin = document.getElementById('cfgBinId'); if (elBin) elBin.value = cloudConfig.binId || '';
+            const elKey = document.getElementById('cfgApiKey'); if (elKey) elKey.value = cloudConfig.apiKey || '';
+            const elU = document.getElementById('cfgWebhookUnpaid'); if (elU) elU.value = cloudConfig.webhookUnpaid || '';
+            const elP = document.getElementById('cfgWebhookPaid'); if (elP) elP.value = cloudConfig.webhookPaid || '';
+
+            refreshUI();
+            if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
+        }
+
+        function autoSave() {
+            const data = { pages, projects, tasks, assignees, payers, currentPageId, cloudConfig };
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+            syncToCloud();
+        }
+
+        // --- Cloud Info ---
+        function saveCloudConfig() {
+            cloudConfig.binId = document.getElementById('cfgBinId').value.trim();
+            cloudConfig.apiKey = document.getElementById('cfgApiKey').value.trim();
+            cloudConfig.webhookUnpaid = document.getElementById('cfgWebhookUnpaid').value.trim();
+            cloudConfig.webhookPaid = document.getElementById('cfgWebhookPaid').value.trim();
+            autoSave();
+            syncFromCloud();
+            document.getElementById('cloudModal').style.display = 'none';
+        }
+
+        async function sendDiscordWebhook(task, type) {
+            let url = ''; let payload = {};
+            const assignee = assignees.find(a => a.id === task.assigneeId);
+            const assigneeName = assignee ? assignee.name : 'Unknown';
+            const assigneeTag = (assignee && assignee.discordId) ? `<@${assignee.discordId}>` : assigneeName;
+
+            let jobDesc = [];
+            if (task.job.clean) jobDesc.push("ดูดคลีน");
+            if (task.job.typeset) jobDesc.push("ลงคำ");
+            const jobStr = jobDesc.join(" + ") || "ยังไม่มีงาน";
+            const price = calculatePrice(task);
+
+            if (type === 'new') {
+                // Creates New Task
+                url = cloudConfig.webhookUnpaid;
+                if (!url) return;
+                payload = { content: `**${task.title}**\nตอนที่ ${task.chapter}\n${jobStr}\n${assigneeTag}` };
+
+            } else if (type === 'topay') {
+                // To Pay: Tag Payer
+                url = cloudConfig.webhookPaid; // Use Financial Webhook
+                if (!url) return;
+                const payer = payers.find(p => p.id === task.payerId);
+                const payerTag = (payer && payer.discordId) ? `<@${payer.discordId}>` : (payer ? payer.name : 'Unknown Payer');
+
+                // Format: Title | คนรับผิดชอบ : Name \n Chapter \n Job Price \n @Payer
+                payload = { content: `**${task.title}** | คนรับผิดชอบ : **${assigneeName}**\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
+
+            } else if (type === 'paid') {
+                // Paid: Tag Assignee
+                url = cloudConfig.webhookPaid;
+                if (!url) return;
+
+                // Format: Title | จ่ายแล้ว \n Chapter \n ~~Job Price~~ \n @Assignee
+                payload = { content: `**${task.title}** | **จ่ายแล้ว**\nตอนที่ ${task.chapter}\n~~${jobStr} **${price} บาท**~~\n${assigneeTag}` };
+            }
+
+            try {
+                await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            } catch (e) { console.error("Webhook Error", e); }
+        }
+
+        async function syncFromCloud() {
+            if (!cloudConfig.binId || !cloudConfig.apiKey) return;
+            try {
+                const res = await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}/latest`, { headers: { 'X-Access-Key': cloudConfig.apiKey, 'X-Bin-Meta': 'false' } });
+                if (!res.ok) throw new Error();
+                const d = await res.json();
+                if (d.pages) {
+                    pages = d.pages; projects = d.projects || []; tasks = d.tasks || []; assignees = d.assignees || []; payers = d.payers || [];
+                    currentPageId = d.currentPageId || pages[0].id;
+                    // Ensure existing tasks have a status that fits the new workflow after sync
+                    tasks.forEach(t => {
+                        if (!t.status) t.status = 'unpaid';
+                        if (t.status === 'unpaid' && t.payerId) t.status = 'topay';
+                    });
+                    refreshUI();
+                }
+            } catch (e) { console.log(e); }
+        }
+
+        async function syncToCloud() {
+            if (!cloudConfig.binId || !cloudConfig.apiKey) return;
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'X-Access-Key': cloudConfig.apiKey },
+                    body: JSON.stringify({ pages, projects, tasks, assignees, payers, currentPageId, cloudConfig, updated: new Date() })
+                });
+            } catch (e) { console.log(e); }
+        }
+
+        function forceSync() { syncFromCloud(); showToast('Downloading...'); }
+
+        function refreshUI() {
+            renderPageSelect();
+            renderProjectDropdowns();
+            renderAssigneeDropdown();
+            renderTasks();
+        }
+
+        // --- Page & Project ---
+        function renderPageSelect() {
+            const sel = document.getElementById('pageSelect');
+            if (!sel) return;
+            sel.innerHTML = '';
+            pages.forEach(p => { const opt = document.createElement('option'); opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt); });
+            sel.value = currentPageId;
+        }
+        function switchPage() { currentPageId = document.getElementById('pageSelect').value; currentFilterProj = 'ALL'; autoSave(); refreshUI(); }
+        function createNewPage() { const n = prompt("ชื่อหน้าใหม่:"); if (n) { const id = 'page_' + Date.now(); pages.push({ id, name: n }); currentPageId = id; autoSave(); refreshUI(); } }
+        function renameCurrentPage() { const cur = pages.find(p => p.id === currentPageId); const n = prompt("เปลี่ยนชื่อ:", cur.name); if (n) { cur.name = n; autoSave(); refreshUI(); } }
+
+        function createProject() {
+            const n = document.getElementById('newProjName').value.trim();
+            const c = document.getElementById('newProjColor').value;
+            if (!n) return alert("ใส่ชื่อเรื่อง");
+            if (projects.some(p => p.pageId === currentPageId && p.name === n)) return alert("มีชื่อนี้แล้ว");
+            projects.push({ name: n, color: c, pageId: currentPageId });
+            autoSave(); document.getElementById('newProjName').value = ''; renderProjectDropdowns(); document.getElementById('projectSelect').value = n;
+        }
+        function deleteCurrentProject() {
+            const n = document.getElementById('projectSelect').value;
+            if (n && confirm(`ซ่อนเรื่อง "${n}"? (งานจะไม่หาย แต่จะซ่อนจากรายการ)`)) {
+                projects = projects.filter(p => !(p.pageId === currentPageId && p.name === n));
+                autoSave(); renderProjectDropdowns();
+            }
+        }
+        function renderProjectDropdowns() {
+            const addS = document.getElementById('projectSelect'); const filS = document.getElementById('filterSelect');
+            if (!addS || !filS) return;
+            const pList = projects.filter(p => p.pageId === currentPageId);
+            addS.innerHTML = '<option value="">-- เลือกเรื่อง --</option>'; filS.innerHTML = '<option value="ALL">📂 แสดงทั้งหมด</option>';
+            pList.forEach(p => {
+                let o1 = document.createElement('option'); o1.value = p.name; o1.textContent = p.name; o1.style.backgroundColor = p.color; addS.appendChild(o1);
+                let o2 = document.createElement('option'); o2.value = p.name; o2.textContent = p.name; filS.appendChild(o2);
+            });
+            filS.value = currentFilterProj;
+        }
+
+        // --- Lists ---
+        function openAssigneeModal() { renderAssigneeListModal(); document.getElementById('assigneeModal').style.display = 'flex'; }
+        function openPayerModal() { renderPayerListModal(); document.getElementById('payerModal').style.display = 'flex'; }
+
+        function addAssignee() {
+            const n = document.getElementById('newAssigneeName').value.trim();
+            const c = document.getElementById('newAssigneeColor').value;
+            const d = document.getElementById('newAssigneeDiscord').value.trim();
+            if (!n) return alert("ใส่ชื่อ");
+            assignees.push({ id: 'as_' + Date.now(), name: n, color: c, discordId: d });
+            document.getElementById('newAssigneeName').value = ''; autoSave(); renderAssigneeListModal(); renderAssigneeDropdown();
+        }
+
+        function addPayer() {
+            const n = document.getElementById('newPayerName').value.trim();
+            const d = document.getElementById('newPayerDiscord').value.trim();
+            const code = document.getElementById('newPayerCode').value.trim();
+            if (!n) return alert("ใส่ชื่อ");
+            if (!code) return alert("ต้องใส่รหัส (Code) สำหรับคนจ่าย");
+            payers.push({ id: 'py_' + Date.now(), name: n, discordId: d, code: code });
+            document.getElementById('newPayerName').value = ''; document.getElementById('newPayerCode').value = '';
+            autoSave(); renderPayerListModal();
+        }
+
+        function deleteAssignee(id) { if (confirm("ลบ?")) { assignees = assignees.filter(a => a.id !== id); autoSave(); renderAssigneeListModal(); renderAssigneeDropdown(); } }
+        function deletePayer(id) { if (confirm("ลบ?")) { payers = payers.filter(a => a.id !== id); autoSave(); renderPayerListModal(); } }
+
+        function renderAssigneeListModal() {
+            const cont = document.getElementById('assigneeListModal'); cont.innerHTML = '';
+            assignees.forEach(a => {
+                const d = document.createElement('div'); d.style.cssText = 'display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #eee; align-items:center;';
+                d.innerHTML = `<div><span style="display:inline-block; width:15px; height:15px; background:${a.color}; border-radius:50%; margin-right:5px;"></span><b>${a.name}</b></div><button class="btn-red" onclick="deleteAssignee('${a.id}')">ลบ</button>`;
+                cont.appendChild(d);
+            });
+        }
+        function renderPayerListModal() {
+            const cont = document.getElementById('payerListModal'); cont.innerHTML = '';
+            payers.forEach(p => {
+                const d = document.createElement('div'); d.style.cssText = 'display:flex; justify-content:space-between; padding:5px; border-bottom:1px solid #eee; align-items:center;';
+                d.innerHTML = `<div><b>${p.name}</b> (Code Set)</div><button class="btn-red" onclick="deletePayer('${p.id}')">ลบ</button>`;
+                cont.appendChild(d);
+            });
+        }
+        function renderAssigneeDropdown() {
+            const sel = document.getElementById('assigneeSelect');
+            const filterSel = document.getElementById('filterAssignee');
+            if (sel) { sel.innerHTML = '<option value="">-- ผู้รับผิดชอบ --</option>'; assignees.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; sel.appendChild(o); }); }
+            if (filterSel) { filterSel.innerHTML = '<option value="ALL">👤 คน: ทั้งหมด</option>'; assignees.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = a.name; filterSel.appendChild(o); }); }
+        }
+
+        // --- Tasks ---
+        function addNote() {
+            const n = document.getElementById('projectSelect').value;
+            const assigneeId = document.getElementById('assigneeSelect').value;
+            const s = parseInt(document.getElementById('inputStart').value);
+            let e = parseInt(document.getElementById('inputEnd').value);
+
+            const isClean = document.getElementById('chkInitClean').checked;
+            const isTypeset = document.getElementById('chkInitTypeset').checked;
+            const doAutoSend = document.getElementById('chkInitWebhook').checked;
+
+            if (!n) return alert("เลือกเรื่อง");
+            if (isNaN(s)) return alert("ใส่เลขตอน"); // inputStart is required
+
+            // If inputEnd is empty or NaN, default to inputStart (Single Chapter)
+            if (isNaN(e)) e = s;
+
+            if (e < s) return alert("เลขตอนผิด (End < Start)");
+
+            const proj = projects.find(p => p.pageId === currentPageId && p.name === n);
+            const c = proj ? proj.color : '#eee';
+
+            // Format Chapter String: if 1 == 1 -> "1", else "1-3"
+            const chapterStr = (s === e) ? s.toString() : `${s}-${e}`;
+
+            const newTask = {
+                id: '_' + Math.random().toString(36).substr(2, 9),
+                title: n,
+                chapter: chapterStr,
+                status: 'unpaid', // New tasks start as unpaid
+                job: { clean: isClean, typeset: isTypeset },
+                assigneeId: assigneeId || null,
+                color: c,
+                pageId: currentPageId,
+                createdAt: new Date().toISOString(),
+                payerId: ''
+            };
+            tasks.push(newTask);
+
+            if (doAutoSend) sendDiscordWebhook(newTask, 'new');
+            autoSave(); renderTasks();
+            document.getElementById('inputStart').value = ''; document.getElementById('inputEnd').value = ''; showToast('เพิ่มงานสำเร็จ');
+        }
+
+        function deleteNote(id) {
+            if (confirm("ต้องการลบงานนี้ใช่หรือไม่? (Delete Task?)")) {
+                tasks = tasks.filter(t => t.id !== id);
+                autoSave();
+                renderTasks();
+            }
+        }
+
+        function updateJob(id, type, checked) {
+            const t = tasks.find(x => x.id === id);
+            if (t) { t.job[type] = checked; autoSave(); renderTasks(); }
+        }
+
+        function calculatePrice(t) {
+            let p = 0;
+            // Calculate Count from Range
+            let count = 1;
+            if (t.chapter && t.chapter.includes('-')) {
+                const parts = t.chapter.split('-');
+                const s = parseFloat(parts[0]);
+                const e = parseFloat(parts[1]);
+                if (!isNaN(s) && !isNaN(e) && e >= s) {
+                    count = Math.floor(e - s) + 1;
+                }
+            }
+
+            if (t.job && t.job.clean) p += 50;
+            if (t.job && t.job.typeset) p += 30;
+            return p * count;
+        }
+
+        function toggleSort(column) {
+            const states = ['default', 'asc', 'desc'];
+            let current = sortState[column];
+            let nextIndex = (states.indexOf(current) + 1) % states.length;
+            sortState[column] = states[nextIndex];
+            renderTasks();
+        }
+
+        function compareTasks(a, b, direction) {
+            if (a.title !== b.title) return a.title.localeCompare(b.title);
+            const numA = parseFloat(a.chapter); const numB = parseFloat(b.chapter);
+            if (!isNaN(numA) && !isNaN(numB)) return direction === 'asc' ? numA - numB : numB - numA;
+            return direction === 'asc' ? a.chapter.localeCompare(b.chapter, undefined, { numeric: true }) : b.chapter.localeCompare(a.chapter, undefined, { numeric: true });
+        }
+
+        function updateFilter() {
+            currentFilterProj = document.getElementById('filterSelect').value;
+            currentFilterAssignee = document.getElementById('filterAssignee').value;
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const cont = { unpaid: document.getElementById('container-unpaid'), topay: document.getElementById('container-topay'), paid: document.getElementById('container-paid') };
+            if (!cont.unpaid || !cont.paid || !cont.topay) return;
+            cont.unpaid.innerHTML = ''; cont.topay.innerHTML = ''; cont.paid.innerHTML = '';
+
+            let groups = { unpaid: [], topay: [], paid: [] };
+            const assigneeFilter = document.getElementById('filterAssignee') ? document.getElementById('filterAssignee').value : 'ALL';
+            const filteredTasks = tasks.filter(t => {
+                if (t.pageId !== currentPageId) return false;
+                if (currentFilterProj !== 'ALL' && t.title !== currentFilterProj) return false;
+                if (assigneeFilter !== 'ALL' && t.assigneeId !== assigneeFilter) return false;
+                return true;
+            });
+            filteredTasks.forEach(t => {
+                if (t.status === 'paid') groups.paid.push(t);
+                else if (t.status === 'topay') groups.topay.push(t);
+                else groups.unpaid.push(t); // Default to unpaid
+            });
+
+            ['unpaid', 'topay', 'paid'].forEach(status => {
+                if (sortState[status] !== 'default') { groups[status].sort((a, b) => compareTasks(a, b, sortState[status])); }
+                groups[status].forEach(t => {
+                    const el = document.createElement('div');
+                    el.className = `note ${status}`; el.id = t.id;
+
+                    // Lock Paid Tasks
+                    if (status === 'paid') {
+                        el.draggable = false;
+                        el.style.cursor = 'default';
+                        el.style.opacity = '0.9';
+                    } else {
+                        el.draggable = true;
+                        el.ondragstart = drag;
+                    }
+
+                    el.style.borderLeftColor = t.color;
+
+                    let assigneeHtml = '';
+                    if (t.assigneeId) {
+                        const ag = assignees.find(a => a.id === t.assigneeId);
+                        assigneeHtml = ag ? `<div class="assignee-badge" style="background:${ag.color}">${ag.name}</div>` : '';
+                    }
+
+                    const price = calculatePrice(t);
+                    const job = t.job || { clean: false, typeset: false };
+
+                    let payerHtml = '';
+                    if (status === 'paid') {
+                        const pObj = payers.find(p => p.id === t.payerId);
+                        const pName = pObj ? pObj.name : 'Unknown';
+                        payerHtml = `<div class="payer-tag">💸 จ่ายโดย: <b>${pName}</b></div>`;
+                    }
+                    else if (status === 'topay') {
+                        const pObj = payers.find(p => p.id === t.payerId);
+                        const pName = pObj ? pObj.name : 'Waiting...';
+                        payerHtml = `<div class="payer-tag" style="background:#fcefdc;">⏳ รอจ่าย: ${pName}</div>`;
+                    }
+
+                    let delBtn = '';
+                    if (status === 'unpaid') {
+                        delBtn = `<button class="delete-btn" onclick="deleteNote('${t.id}')">×</button>`;
+                    }
+
+                    el.innerHTML = `
+                        ${delBtn}
+                        ${assigneeHtml}
+                        <div class="note-header">
+                            <h3>${t.title} #${t.chapter}</h3>
+                            <button class="btn-icon" onclick="sendDiscordWebhook(tasks.find(x=>x.id=='${t.id}'), '${status}')" title="Send to Discord"><i class="fa-brands fa-discord"></i></button>
+                        </div>
+                        <div class="job-checks">
+                             <label class="check-box ${job.clean ? 'checked' : ''}"><input type="checkbox" ${job.clean ? 'checked' : ''} onclick="updateJob('${t.id}', 'clean', this.checked)"> ดูดคลีน 50฿</label>
+                             <label class="check-box ${job.typeset ? 'checked' : ''}"><input type="checkbox" ${job.typeset ? 'checked' : ''} onclick="updateJob('${t.id}', 'typeset', this.checked)"> ลงคำ 30฿</label>
+                        </div>
+                        <div class="price-tag">💰 ${price} บาท</div>
+                        ${payerHtml}
+                    `;
+                    cont[status].appendChild(el);
+                });
+            });
+            document.getElementById('cnt-unpaid').textContent = groups.unpaid.length;
+            document.getElementById('cnt-topay').textContent = groups.topay.length;
+            document.getElementById('cnt-paid').textContent = groups.paid.length;
+        }
+
+        // --- Drag & Drop & Security ---
+        function allowDrop(ev) { ev.preventDefault(); ev.currentTarget.classList.add('drag-over'); }
+        function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
+        function drag(ev) { ev.dataTransfer.setData("text", ev.target.id); }
+
+        function drop(ev) {
+            ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
+            const id = ev.dataTransfer.getData("text");
+            const colId = ev.currentTarget.id;
+
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+            if (task.status === colId) return;
+
+            // Scenario 1: Anything -> ToPay : Prompt for Payer (Notification only)
+            if (colId === 'topay') {
+                promptForPayment(id, colId);
+                return;
+            }
+
+            // Scenario 2: Anything -> Paid : Prompt for Payer + Code (Auth)
+            if (colId === 'paid') {
+                promptForPayment(id, colId);
+                return;
+            }
+
+            // Scenario 3: Paid -> Any Other : FORBIDDEN
+            if (task.status === 'paid' && colId !== 'paid') {
+                alert("งานที่จ่ายแล้วไม่สามารถย้ายกลับได้ (Complete! Cannot move back)");
+                return;
+            }
+
+            // Scenario 4: Any -> Unpaid (e.g. from ToPay): Just Move
+            task.status = colId;
+            autoSave(); renderTasks();
+        }
+
+        function promptForPayment(taskId, targetCol) {
+            draggedTaskId = taskId;
+            dragTargetCol = targetCol;
+
+            const task = tasks.find(t => t.id === taskId);
+
+            const isPaid = (targetCol === 'paid');
+            const title = isPaid ? "💸 ยืนยันการจ่ายเงิน (Confirm)" : "⚠️ แจ้งยอดจ่าย (Send to Payer)";
+            const btnText = isPaid ? "ยืนยัน & จ่าย" : "แจ้งยอด & ย้ายสถานะ";
+
+            document.getElementById('payModalTitle').innerHTML = `<b>${title}</b><br>${task.title} #${task.chapter}<br>ราคา: ${calculatePrice(task)} บาท`;
+
+            const sel = document.getElementById('paySelectPayer');
+            sel.innerHTML = '<option value="">-- เลือกคนจ่าย --</option>';
+            payers.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.textContent = p.name;
+                sel.appendChild(opt);
+            });
+            if (task.payerId) sel.value = task.payerId; // Pre-select if already assigned
+
+            // Toggle Password Field
+            const codeInput = document.getElementById('payInputCode');
+            const codeLabel = document.querySelector('label[for="payInputCode"]') || codeInput.previousElementSibling;
+
+            if (isPaid) {
+                codeInput.style.display = 'block';
+                if (codeLabel) codeLabel.style.display = 'block';
+            } else {
+                codeInput.style.display = 'none';
+                if (codeLabel) codeLabel.style.display = 'none';
+            }
+
+            // Update button text
+            const confirmBtn = document.querySelector('#paymentModal .btn-green');
+            confirmBtn.innerText = btnText;
+
+            document.getElementById('payInputCode').value = '';
+            document.getElementById('paymentModal').style.display = 'flex';
+        }
+
+        async function confirmPayment() {
+            const payerId = document.getElementById('paySelectPayer').value;
+            const code = document.getElementById('payInputCode').value;
+
+            if (!payerId) return alert("กรุณาเลือกคนจ่ายเงิน");
+
+            const payer = payers.find(p => p.id === payerId);
+            if (!payer) return alert("ไม่พบข้อมูลคนจ่าย");
+
+            // If PAID, check code. If TOPAY, skip code.
+            if (dragTargetCol === 'paid') {
+                if (payer.code !== code) return alert("รหัสผ่านไม่ถูกต้อง (Incorrect Code)");
+            }
+
+            // Success
+            const task = tasks.find(t => t.id === draggedTaskId);
+            if (task) {
+                task.status = dragTargetCol;
+                task.payerId = payerId;
+                if (dragTargetCol === 'paid') task.paidAt = new Date().toISOString();
+
+                autoSave();
+                renderTasks();
+                await sendDiscordWebhook(task, dragTargetCol); // 'paid' or 'topay'
+            }
+
+            document.getElementById('paymentModal').style.display = 'none';
+        }
+
+        function cancelPayment() {
+            document.getElementById('paymentModal').style.display = 'none';
+            draggedTaskId = null;
+        }
+
+        // --- Advanced Summary ---
+        function openSummaryModal() {
+            // Populate filters
+            const fill = (id, data, label) => {
+                const el = document.getElementById(id);
+                el.innerHTML = '<option value="ALL">-- ทั้งหมด --</option>';
+                data.forEach(x => {
+                    const o = document.createElement('option');
+                    o.value = x.id; o.innerText = x[label];
+                    el.appendChild(o);
+                });
+            };
+            fill('filterSumPayer', payers, 'name');
+            fill('filterSumAssignee', assignees, 'name');
+            fill('filterSumPage', pages, 'name');
+
+            // Populate unique projects
+            const projEl = document.getElementById('filterSumProject');
+            projEl.innerHTML = '<option value="ALL">-- ทั้งหมด --</option>';
+            const uniqueProjs = [...new Set(projects.map(p => p.name))];
+            uniqueProjs.sort().forEach(name => {
+                const o = document.createElement('option');
+                o.value = name; o.innerText = name;
+                projEl.appendChild(o);
+            });
+
+            renderSummaryTable();
+            document.getElementById('summaryModal').style.display = 'flex';
+        }
+
+        function renderSummaryTable() {
+            const pFilter = document.getElementById('filterSumPayer').value;
+            const aFilter = document.getElementById('filterSumAssignee').value;
+            const pgFilter = document.getElementById('filterSumPage').value;
+            const projFilter = document.getElementById('filterSumProject').value;
+            const cont = document.getElementById('summaryTable');
+            const statsCont = document.getElementById('summaryStats');
+
+            let filtered = tasks.filter(t => {
+                if (pgFilter !== 'ALL' && t.pageId !== pgFilter) return false;
+                if (aFilter !== 'ALL' && t.assigneeId !== aFilter) return false;
+                if (pFilter !== 'ALL' && t.payerId !== pFilter) return false;
+                if (projFilter !== 'ALL' && t.title !== projFilter) return false;
+                return true;
+            });
+
+            let totalUnpaid = 0, countUnpaid = 0;
+            let totalPaid = 0, countPaid = 0;
+
+            filtered.forEach(t => {
+                const p = calculatePrice(t);
+                if (t.status === 'paid') { totalPaid += p; countPaid++; }
+                else { totalUnpaid += p; countUnpaid++; }
+            });
+
+            // Stats
+            statsCont.innerHTML = `
+                <div style="flex:1; background:#e74c3c; color:white; padding:10px; border-radius:5px; text-align:center;">
+                    <small>ยังไม่จ่าย (${countUnpaid})</small><br>
+                    <span style="font-size:1.2rem; font-weight:bold;">${totalUnpaid.toLocaleString()}</span>
+                </div>
+                <div style="flex:1; background:#27ae60; color:white; padding:10px; border-radius:5px; text-align:center;">
+                    <small>จ่ายแล้ว (${countPaid})</small><br>
+                    <span style="font-size:1.2rem; font-weight:bold;">${totalPaid.toLocaleString()}</span>
+                </div>
+            `;
+
+            // List
+            let html = '<table style="width:100%; border-collapse:collapse; font-size:0.9rem;">';
+            html += `<tr style="background:#eee;"><th style="padding:5px; text-align:left;">เรื่อง</th><th style="padding:5px;">ผู้รับ</th><th style="padding:5px;">คนจ่าย</th><th style="padding:5px; text-align:right;">ราคา</th></tr>`;
+
+            filtered.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+            filtered.forEach(t => {
+                let ag = assignees.find(x => x.id === t.assigneeId)?.name || '-';
+                let py = payers.find(x => x.id === t.payerId)?.name || '-';
+                let price = calculatePrice(t);
+                let color = t.status === 'paid' ? '#27ae60' : '#e74c3c';
+
+                html += `
+                    <tr style="border-bottom:1px solid #f1f1f1;">
+                        <td style="padding:5px;"><b>${t.title}</b> #${t.chapter}</td>
+                        <td style="padding:5px;">${ag}</td>
+                        <td style="padding:5px;">${py}</td>
+                        <td style="padding:5px; text-align:right; color:${color}; font-weight:bold;">${price}</td>
+                    </tr>
+                `;
+            });
+            html += '</table>';
+            cont.innerHTML = html;
+        }
+
+        function resetAllData() {
+            const c = prompt("ใส่รหัสรีเซ็ต (Reset Code) to confirm:");
+            if (c === "Reset888") {
+                if (confirm("ล้างข้อมูลทั้งหมดจริงหรือไม่? (Cannot Undo)")) {
+                    localStorage.removeItem(STORAGE_KEY);
+                    location.reload();
+                }
+            } else {
+                if (c) alert("รหัสผิด (Wrong Code)");
+            }
+        }
+
+        function saveToJSON() {
+            const blob = new Blob([JSON.stringify({ pages, projects, tasks, assignees, payers, currentPageId, cloudConfig }, null, 2)], { type: "application/json" });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'MangaBoard_Ultimate_Protected.json'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        }
+        function loadFromJSON(inp) {
+            if (!inp.files[0]) return;
+            const r = new FileReader(); r.onload = e => {
+                try {
+                    const d = JSON.parse(e.target.result);
+                    if (d.pages) {
+                        pages = d.pages; projects = d.projects; tasks = d.tasks;
+                        assignees = d.assignees; payers = d.payers || [];
+                        currentPageId = d.currentPageId; cloudConfig = d.cloudConfig;
+                        payers.forEach(p => { if (!p.code) p.code = ''; });
+                        autoSave(); refreshUI(); alert("Success");
+                    }
+                } catch (err) { alert("Error"); }
+            };
+            r.readAsText(inp.files[0]); inp.value = '';
+        }
+
+        function showToast(message, type = 'success') {
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            if (type === 'error') toast.style.backgroundColor = '#c0392b';
+            toast.innerHTML = `<i class="fa-solid fa-info-circle"></i> ${message}`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.classList.add('show'), 10);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+
+</html>
