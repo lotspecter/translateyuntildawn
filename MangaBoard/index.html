@@ -870,6 +870,16 @@
                 if (d.pages) {
                     pages = d.pages; projects = d.projects || []; tasks = d.tasks || []; assignees = d.assignees || []; payers = d.payers || [];
                     currentPageId = d.currentPageId || pages[0].id;
+
+                    // Sync Webhooks from Cloud if available
+                    if (d.cloudConfig) {
+                        if (d.cloudConfig.webhookUnpaid) cloudConfig.webhookUnpaid = d.cloudConfig.webhookUnpaid;
+                        if (d.cloudConfig.webhookPaid) cloudConfig.webhookPaid = d.cloudConfig.webhookPaid;
+                        // Update UI inputs
+                        const elU = document.getElementById('cfgWebhookUnpaid'); if (elU) elU.value = cloudConfig.webhookUnpaid;
+                        const elP = document.getElementById('cfgWebhookPaid'); if (elP) elP.value = cloudConfig.webhookPaid;
+                    }
+
                     // Ensure existing tasks have a status that fits the new workflow after sync
                     tasks.forEach(t => {
                         if (!t.status) t.status = 'unpaid';
