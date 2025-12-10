@@ -776,6 +776,22 @@
 
             payers.forEach(p => { if (!p.code) p.code = ''; });
 
+            // --- Auto-Login Logic (URL Params) ---
+            const urlParams = new URLSearchParams(window.location.search);
+            const paramBin = urlParams.get('bin');
+            const paramKey = urlParams.get('key');
+            if (paramBin && paramKey) {
+                cloudConfig.binId = paramBin;
+                cloudConfig.apiKey = paramKey;
+
+                // Save to LocalStorage immediately (Without triggering syncToCloud yet)
+                const data = { pages, projects, tasks, assignees, payers, currentPageId, cloudConfig };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+
+                window.history.replaceState({}, document.title, window.location.pathname);
+                setTimeout(() => showToast("🔑 รับกุญแจเรียบร้อย! กำลังดึงข้อมูล..."), 500);
+            }
+
             // Init Config UI
             const elBin = document.getElementById('cfgBinId'); if (elBin) elBin.value = cloudConfig.binId || '';
             const elKey = document.getElementById('cfgApiKey'); if (elKey) elKey.value = cloudConfig.apiKey || '';
