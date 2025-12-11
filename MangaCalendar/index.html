@@ -781,9 +781,12 @@
             });
         }
 
-        function addAssignee() {
+        async function addAssignee() {
             let name = prompt("ชื่อผู้รับผิดชอบงาน:");
             if (name) {
+                if (cloudConfig.binId && cloudConfig.apiKey) {
+                    try { await syncFromCloud(); } catch (e) { }
+                }
                 assignees.push({ id: 'a' + Date.now(), name, color: '#2ecc71' }); // Default green-ish
                 saveAll();
             }
@@ -923,13 +926,26 @@
             document.getElementById('addEpNum').focus();
         }
 
-        function confirmAddEvent() {
+        async function confirmAddEvent() {
             let sId = document.getElementById('addSeriesSelect').value;
             let ep = document.getElementById('addEpNum').value.trim();
             let assignId = document.getElementById('addAssigneeSelect').value;
 
             if (!ep) return showToast('ใส่เลขตอนด้วยครับ', 'error');
+
+            // Sync before adding event
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try { await syncFromCloud(); } catch (e) { console.error("Pre-add sync failed", e); }
+            }
+
             let sObj = series.find(s => s.id === sId);
+            if (!sObj) {
+                // In case series list changed/deleted during sync
+                showToast('ไม่พบข้อมูลเรื่อง (อาจถูกลบไปแล้ว)', 'error');
+                document.getElementById('addModal').style.display = 'none';
+                return;
+            }
+
             events.push({
                 id: 'e' + Date.now(), seriesId: sId, title: sObj.name, chapter: ep,
                 start: selectedDate, link: '', isRead: false, pageId: currentPageId, assigneeId: assignId
@@ -1009,12 +1025,18 @@
         function renamePage() { let p = pages.find(p => p.id === currentPageId); let name = prompt("เปลี่ยนชื่อหน้า:", p.name); if (name) { p.name = name; saveAll(); } }
         function deletePage() { if (pages.length <= 1) return showToast('ต้องเหลืออย่างน้อย 1 หน้า', 'error'); if (confirm("ลบหน้านี้?")) { series = series.filter(s => s.pageId !== currentPageId); events = events.filter(e => e.pageId !== currentPageId); pages = pages.filter(p => p.id !== currentPageId); currentPageId = pages[0].id; saveAll(); } }
 
-        function createSeries() {
+        async function createSeries() {
             let name = document.getElementById('newSeriesName').value.trim();
             let color = document.getElementById('newSeriesColor').value;
             let orig = document.getElementById('newSeriesOrig').value.trim();
             let rt = document.getElementById('newSeriesRT').value.trim();
             if (!name) return showToast('ใส่ชื่อเรื่องก่อนครับ', 'error');
+
+            // Sync before creating to avoiding overwrite
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try { await syncFromCloud(); } catch (e) { console.error("Pre-create sync failed", e); }
+            }
+
             if (orig && !orig.startsWith('http')) orig = 'https://' + orig;
             if (rt && !rt.startsWith('http')) rt = 'https://' + rt;
             let newSeries = { id: 's' + Date.now(), name, color, pageId: currentPageId, origLink: orig, rtLink: rt };
