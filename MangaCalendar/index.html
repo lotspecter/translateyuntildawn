@@ -119,10 +119,18 @@
         /* Main View */
         .main-view {
             flex: 1;
-            padding: 15px;
             display: flex;
             flex-direction: column;
+            overflow: hidden;
+            /* Stop main scroll */
+            position: relative;
+            background-color: var(--bg);
+        }
+
+        .calendar-wrapper {
+            flex: 1;
             overflow-y: auto;
+            padding: 10px 15px 15px 15px;
             position: relative;
         }
 
@@ -217,12 +225,61 @@
             background: var(--success);
         }
 
+        .dot.online {
+            background: var(--success);
+        }
+
+        /* --- Assignee Tabs --- */
+        .assignee-tabs {
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            padding: 15px 15px 5px 15px;
+            /* Padding moved here */
+            scrollbar-width: thin;
+            flex-shrink: 0;
+            /* Prevent shrinking */
+            background: var(--bg);
+            /* Ensure solid background */
+            z-index: 20;
+        }
+
+        .assignee-tab {
+            padding: 8px 16px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: #555;
+            white-space: nowrap;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+
+        .assignee-tab:hover {
+            background: #f0f0f0;
+            transform: translateY(-2px);
+        }
+
+        .assignee-tab.active {
+            color: white;
+            border-color: transparent;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
         /* --- Calendar & Events --- */
         #calendar {
             background: white;
             padding: 10px;
             border-radius: 10px;
-            flex: 1;
+            min-height: 100%;
+            /* Ensure full height */
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         }
 
@@ -597,7 +654,10 @@
         </div>
 
         <div class="main-view">
-            <div id="calendar"></div>
+            <div id="assigneeTabs" class="assignee-tabs"></div>
+            <div class="calendar-wrapper">
+                <div id="calendar"></div>
+            </div>
         </div>
 
 
@@ -660,6 +720,7 @@
         let calendar;
         let selectedEventId = null;
         let selectedDate = null;
+        let currentAssigneeFilter = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             initCalendar();
@@ -682,6 +743,7 @@
             document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
             if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
             renderAssignees();
+            renderAssigneeTabs();
         });
 
         // Toast Function
@@ -741,7 +803,11 @@
         }
 
         function getFilteredEvents() {
-            return events.filter(e => e.pageId === currentPageId).map(e => {
+            return events.filter(e => {
+                if (e.pageId !== currentPageId) return false;
+                if (currentAssigneeFilter && e.assigneeId !== currentAssigneeFilter) return false;
+                return true;
+            }).map(e => {
                 let s = series.find(s => s.id === e.seriesId);
                 let assignee = assignees.find(a => a.id === e.assigneeId);
                 let title = `${e.title} #${e.chapter}`;
@@ -778,6 +844,37 @@
                     <button class="btn-icon-del" onclick="deleteAssignee('${a.id}')"><i class="fa-solid fa-trash"></i></button>
                 `;
                 el.appendChild(div);
+            });
+            renderAssigneeTabs();
+        }
+
+        function renderAssigneeTabs() {
+            let container = document.getElementById('assigneeTabs');
+            if (!container) return;
+            container.innerHTML = '';
+
+            // "All" Tab
+            let allTab = document.createElement('button');
+            allTab.className = `assignee-tab ${currentAssigneeFilter === null ? 'active' : ''}`;
+            allTab.innerHTML = '<i class="fa-solid fa-users"></i> ทั้งหมด';
+            if (currentAssigneeFilter === null) {
+                allTab.style.backgroundColor = 'var(--secondary)';
+            }
+            allTab.onclick = () => { currentAssigneeFilter = null; renderAssigneeTabs(); refreshUI(); };
+            container.appendChild(allTab);
+
+            assignees.forEach(a => {
+                let tab = document.createElement('button');
+                let isActive = currentAssigneeFilter === a.id;
+                tab.className = `assignee-tab ${isActive ? 'active' : ''}`;
+                tab.innerHTML = `<span style="width:10px; height:10px; border-radius:50%; background:${a.color}; border:1px solid rgba(255,255,255,0.5);"></span> ${a.name}`;
+
+                if (isActive) {
+                    tab.style.backgroundColor = a.color;
+                }
+
+                tab.onclick = () => { currentAssigneeFilter = a.id; renderAssigneeTabs(); refreshUI(); };
+                container.appendChild(tab);
             });
         }
 
