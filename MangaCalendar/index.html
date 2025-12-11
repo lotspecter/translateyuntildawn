@@ -283,6 +283,11 @@
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         }
 
+        .fc-daygrid-day.highlight-active {
+            background-color: rgba(142, 68, 173, 0.2) !important;
+            transition: background-color 0.2s;
+        }
+
         .fc-event {
             cursor: pointer;
             border: none !important;
@@ -647,6 +652,8 @@
             </div>
 
             <div class="settings-box">
+                <button class="btn" style="background:#27ae60; margin-bottom:10px;" onclick="exportCSV()"><i
+                        class="fa-solid fa-file-csv"></i> Export CSV</button>
                 <div class="cloud-status">
                     <div class="dot" id="statusDot"></div><span id="statusText">Local Only</span>
                 </div>
@@ -776,6 +783,8 @@
                 dayMaxEvents: false,
                 contentHeight: 'auto',
                 dateClick: (info) => {
+                    document.querySelectorAll('.highlight-active').forEach(el => el.classList.remove('highlight-active'));
+                    info.dayEl.classList.add('highlight-active');
                     selectedDate = info.dateStr;
                     openAddModal();
                 },
@@ -1220,6 +1229,40 @@
             localStorage.setItem('currentPageId', currentPageId);
             refreshUI();
             renderAssignees();
+        }
+
+        function exportCSV() {
+            let currentEvents = events.filter(e => e.pageId === currentPageId);
+            if (currentEvents.length === 0) return showToast("ไม่มีข้อมูลในหน้านี้ให้ Export", "error");
+
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // BOM
+            csvContent += "Date,Series,Chapter,Assignee,Status,Link\n";
+
+            // Sort by date
+            currentEvents.sort((a, b) => new Date(a.start) - new Date(b.start));
+
+            currentEvents.forEach(e => {
+                let s = series.find(x => x.id === e.seriesId);
+                let a = assignees.find(x => x.id === e.assigneeId);
+                let status = e.isRead ? "Read" : "Unread";
+                let row = [
+                    e.start,
+                    `"${(s ? s.name : e.title).replace(/"/g, '""')}"`,
+                    e.chapter,
+                    `"${(a ? a.name : '').replace(/"/g, '""')}"`,
+                    status,
+                    `"${(e.link || '').replace(/"/g, '""')}"`
+                ];
+                csvContent += row.join(",") + "\n";
+            });
+
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `manga_calendar_export_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         function setStatus(cls, txt) { document.getElementById('statusDot').className = 'dot ' + cls; document.getElementById('statusText').textContent = txt; }

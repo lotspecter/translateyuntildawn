@@ -327,6 +327,11 @@
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         }
 
+        .fc-daygrid-day.highlight-active {
+            background-color: #e6f4ea !important;
+            transition: background-color 0.2s;
+        }
+
         .fc-toolbar-title {
             font-size: 1.2rem !important;
         }
@@ -747,14 +752,18 @@
         <!-- TAB 3: SETTINGS -->
         <div id="tab-settings" class="tab-content">
             <div class="settings-card">
-                <h3 style="color:var(--secondary); margin-top:0;"><i class="fa-solid fa-file-csv"></i> Import ข้อมูล
-                    (CSV)</h3>
-                <div class="drop-zone" onclick="document.getElementById('csvInput').click()">
-                    <i class="fa-solid fa-cloud-arrow-up"></i>
-                    <div>คลิกเพื่อเลือกไฟล์ .csv</div>
-                    <div style="font-size:0.8rem; margin-top:5px;">(คอลัมน์: วันที่, ชื่อเว็บ, ยอดรับ, %)</div>
+                <h3 style="color:var(--secondary); margin-top:0;"><i class="fa-solid fa-file-export"></i> จัดการข้อมูล
+                    (Import/Export)</h3>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn" style="flex:1; background:#27ae60; color:white;" onclick="exportCSV()"><i
+                            class="fa-solid fa-file-csv"></i> Export CSV</button>
+                    <button class="btn" style="flex:1; background:#3498db; color:white;"
+                        onclick="document.getElementById('csvInput').click()"><i class="fa-solid fa-file-import"></i>
+                        Import CSV</button>
                 </div>
                 <input type="file" id="csvInput" accept=".csv" style="display:none" onchange="handleCSVUpload(this)">
+                <div style="font-size:0.8rem; margin-top:10px; color:#666; text-align:center;">(Format: วันที่,
+                    ชื่อเว็บ, ยอดรับ, % หัก)</div>
             </div>
 
             <div class="settings-card">
@@ -871,6 +880,48 @@
                 alert(`นำเข้าสำเร็จ ${importedCount} รายการ!`);
             } else { alert('ไม่พบข้อมูลที่ถูกต้องในไฟล์ CSV'); }
         }
+        function exportCSV() {
+            let csvContent = "data:text/csv;charset=utf-8,\uFEFF"; // BOM
+            csvContent += "Date,Platform,Gross,Percent,Net\n";
+
+            // Flatten data
+            let rows = [];
+            for (const [date, platforms] of Object.entries(incomeData)) {
+                platforms.forEach(p => {
+                    rows.push({
+                        date: date,
+                        name: p.name,
+                        gross: p.gross,
+                        percent: p.percent,
+                        net: p.net
+                    });
+                });
+            }
+
+            // Sort by date
+            rows.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            if (rows.length === 0) return showToast("ไม่มีข้อมูลให้ Export", "error");
+
+            rows.forEach(r => {
+                let rowStr = [
+                    r.date,
+                    `"${r.name.replace(/"/g, '""')}"`,
+                    r.gross,
+                    r.percent,
+                    r.net
+                ].join(",");
+                csvContent += rowStr + "\n";
+            });
+
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `income_export_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
 
         // --- UI ---
         function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('active'); document.querySelector('.sidebar-overlay').classList.toggle('active'); }
@@ -921,8 +972,28 @@
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth', locale: 'th', dayMaxEvents: false, contentHeight: 'auto',
                 headerToolbar: { left: 'prev,next', center: 'title', right: 'today' },
-                dateClick: function (info) { currentDate = info.dateStr; updateForm(currentDate); if (window.innerWidth <= 768) toggleSidebar(); },
-                eventClick: function (info) { currentDate = info.event.startStr; updateForm(currentDate); if (window.innerWidth <= 768) toggleSidebar(); },
+                dateClick: function (info) {
+                    document.querySelectorAll('.highlight-active').forEach(el => el.classList.remove('highlight-active'));
+                    info.dayEl.classList.add('highlight-active');
+                    currentDate = info.dateStr;
+                    updateForm(currentDate);
+                    if (window.innerWidth <= 768) toggleSidebar();
+                },
+                eventClick: function (info) {
+                    // Remove highlight from previous day cells
+                    document.querySelectorAll('.highlight-active').forEach(el => el.classList.remove('highlight-active'));
+                    // Since event click doesn't directly give the day element, we rely on the visual feedback of the event detail form opening.
+                    // Or we could try to find the cell, but simple is better to avoid complex DOM traversal.
+                    // If we want to highlight the day cell of the event:
+                    /* 
+                    let dateStr = info.event.startStr;
+                    // FullCalendar doesn't easily expose the day element from event click API without some lookup.
+                    // For now, let's just update form.
+                    */
+                    currentDate = info.event.startStr;
+                    updateForm(currentDate);
+                    if (window.innerWidth <= 768) toggleSidebar();
+                },
                 events: generateEvents(),
                 eventContent: function (arg) {
                     let props = arg.event.extendedProps; let listHtml = '';
