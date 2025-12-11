@@ -803,9 +803,13 @@
         }
 
         function autoSave() {
+            saveLocal();
+            syncToCloud();
+        }
+
+        function saveLocal() {
             const data = { pages, projects, tasks, assignees, payers, currentPageId, cloudConfig };
             localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-            syncToCloud();
         }
 
         // --- Cloud Info ---
@@ -918,9 +922,19 @@
             pages.forEach(p => { const opt = document.createElement('option'); opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt); });
             sel.value = currentPageId;
         }
-        function switchPage() { currentPageId = document.getElementById('pageSelect').value; currentFilterProj = 'ALL'; autoSave(); refreshUI(); }
-        function createNewPage() { const n = prompt("ชื่อหน้าใหม่:"); if (n) { const id = 'page_' + Date.now(); pages.push({ id, name: n }); currentPageId = id; autoSave(); refreshUI(); } }
-        function renameCurrentPage() { const cur = pages.find(p => p.id === currentPageId); const n = prompt("เปลี่ยนชื่อ:", cur.name); if (n) { cur.name = n; autoSave(); refreshUI(); } }
+        function switchPage() { currentPageId = document.getElementById('pageSelect').value; currentFilterProj = 'ALL'; saveLocal(); refreshUI(); }
+        async function createNewPage() {
+            const n = prompt("ชื่อหน้าใหม่:");
+            if (n) {
+                if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+                const id = 'page_' + Date.now(); pages.push({ id, name: n }); currentPageId = id; autoSave(); refreshUI();
+            }
+        }
+        async function renameCurrentPage() {
+            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            const cur = pages.find(p => p.id === currentPageId); const n = prompt("เปลี่ยนชื่อ:", cur.name);
+            if (n) { cur.name = n; autoSave(); refreshUI(); }
+        }
 
         async function createProject() {
             const n = document.getElementById('newProjName').value.trim();

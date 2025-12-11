@@ -1020,10 +1020,26 @@
             renderSidebarSeriesList();
         }
 
-        function switchPage() { currentPageId = document.getElementById('pageSelect').value; localStorage.setItem('currentPageId', currentPageId); refreshUI(); }
-        function createNewPage() { let name = prompt("ชื่อหน้าใหม่:"); if (name) { let id = 'p' + Date.now(); pages.push({ id, name }); currentPageId = id; saveAll(); } }
-        function renamePage() { let p = pages.find(p => p.id === currentPageId); let name = prompt("เปลี่ยนชื่อหน้า:", p.name); if (name) { p.name = name; saveAll(); } }
-        function deletePage() { if (pages.length <= 1) return showToast('ต้องเหลืออย่างน้อย 1 หน้า', 'error'); if (confirm("ลบหน้านี้?")) { series = series.filter(s => s.pageId !== currentPageId); events = events.filter(e => e.pageId !== currentPageId); pages = pages.filter(p => p.id !== currentPageId); currentPageId = pages[0].id; saveAll(); } }
+        function switchPage() { currentPageId = document.getElementById('pageSelect').value; saveAllLocal(); }
+        async function createNewPage() {
+            let name = prompt("ชื่อหน้าใหม่:");
+            if (name) {
+                if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+                let id = 'p' + Date.now(); pages.push({ id, name }); currentPageId = id; saveAll();
+            }
+        }
+        async function renamePage() {
+            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            let p = pages.find(p => p.id === currentPageId); let name = prompt("เปลี่ยนชื่อหน้า:", p.name);
+            if (name) { p.name = name; saveAll(); }
+        }
+        async function deletePage() {
+            if (pages.length <= 1) return showToast('ต้องเหลืออย่างน้อย 1 หน้า', 'error');
+            if (confirm("ลบหน้านี้?")) {
+                if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+                series = series.filter(s => s.pageId !== currentPageId); events = events.filter(e => e.pageId !== currentPageId); pages = pages.filter(p => p.id !== currentPageId); currentPageId = pages[0].id; saveAll();
+            }
+        }
 
         async function createSeries() {
             let name = document.getElementById('newSeriesName').value.trim();
