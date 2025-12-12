@@ -1014,33 +1014,62 @@
         }
         async function processCSV(csvText) {
             // Sync First
-            // Sync First
             if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             const lines = csvText.split(/\r\n|\n/);
             let importedCount = 0;
+
+            // Helper to handle quoted CSV values properly
+            const parseCSVLine = (line) => {
+                const res = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        res.push(current.trim().replace(/^"|"$/g, '')); // Trim and remove quotes
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                res.push(current.trim().replace(/^"|"$/g, ''));
+                return res;
+            };
+
             lines.forEach(line => {
                 if (!line.trim()) return;
-                const cols = line.split(',');
+
+                // Use helper instead of simple split
+                const cols = parseCSVLine(line);
+
                 if (cols.length < 4) return;
-                let dateStr = cols[0].trim();
+                let dateStr = cols[0];
                 if (dateStr.includes('/')) {
                     const parts = dateStr.split('/');
                     if (parts.length === 3) dateStr = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
                 }
-                const name = cols[1].trim();
+                const name = cols[1];
                 const gross = parseFloat(cols[2]);
                 const percent = parseFloat(cols[3]);
+
+                // Validate
                 if (name && !isNaN(gross) && !isNaN(percent)) {
                     const net = gross * (1 - (percent / 100));
                     const newEntry = { name, gross, percent, net };
                     if (!incomeData[dateStr]) incomeData[dateStr] = [];
+
+                    // Check duplicate
                     const existingIdx = incomeData[dateStr].findIndex(item => item.name === name);
                     if (existingIdx >= 0) incomeData[dateStr][existingIdx] = newEntry;
                     else incomeData[dateStr].push(newEntry);
+
                     importedCount++;
                 }
             });
+
             if (importedCount > 0) {
                 localStorage.setItem('incomeData', JSON.stringify(incomeData));
                 refreshAll(); syncToCloud(); showToast(`นำเข้าสำเร็จ ${importedCount} รายการ!`);
