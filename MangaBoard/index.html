@@ -950,7 +950,25 @@
             pages.forEach(p => { const opt = document.createElement('option'); opt.value = p.id; opt.textContent = p.name; sel.appendChild(opt); });
             sel.value = currentPageId;
         }
-        function switchPage() { currentPageId = document.getElementById('pageSelect').value; currentFilterProj = 'ALL'; saveLocal(); refreshUI(); }
+        async function switchPage() {
+            const targetPageId = document.getElementById('pageSelect').value;
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try {
+                    showToast('Syncing Page...');
+                    await syncFromCloud();
+                } catch (e) { console.error(e); }
+            }
+            // Ensure the page still exists after sync, or fallback
+            if (pages.find(p => p.id === targetPageId)) {
+                currentPageId = targetPageId;
+            } else {
+                alert("This page no longer exists on cloud!");
+                currentPageId = pages[0].id;
+            }
+            currentFilterProj = 'ALL';
+            saveLocal();
+            refreshUI();
+        }
         async function createNewPage() {
             const n = prompt("ชื่อหน้าใหม่:");
             if (n) {
@@ -970,17 +988,24 @@
             if (!n) return alert("ใส่ชื่อเรื่อง");
 
             // Sync before adding to prevent overwrite
-
+            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
 
             if (projects.some(p => p.pageId === currentPageId && p.name === n)) return alert("มีชื่อนี้แล้ว");
             projects.push({ name: n, color: c, pageId: currentPageId });
             autoSave(); document.getElementById('newProjName').value = ''; renderProjectDropdowns(); document.getElementById('projectSelect').value = n;
         }
-        function deleteCurrentProject() {
+        async function deleteCurrentProject() {
             const n = document.getElementById('projectSelect').value;
-            if (n && confirm(`ซ่อนเรื่อง "${n}"? (งานจะไม่หาย แต่จะซ่อนจากรายการ)`)) {
-                projects = projects.filter(p => !(p.pageId === currentPageId && p.name === n));
-                autoSave(); renderProjectDropdowns();
+            // Sync before delete
+            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+
+            if (projects.some(p => p.pageId === currentPageId && p.name === n)) {
+                if (n && confirm(`ซ่อนเรื่อง "${n}"? (งานจะไม่หาย แต่จะซ่อนจากรายการ)`)) {
+                    projects = projects.filter(p => !(p.pageId === currentPageId && p.name === n));
+                    autoSave(); renderProjectDropdowns();
+                }
+            } else {
+                renderProjectDropdowns();
             }
         }
         function renderProjectDropdowns() {
@@ -1101,10 +1126,24 @@
             document.getElementById('inputStart').value = ''; document.getElementById('inputEnd').value = ''; showToast('เพิ่มงานสำเร็จ');
         }
 
-        function deleteNote(id) {
-            const task = tasks.find(t => t.id === id);
-            if (!task) return;
+        async function deleteNote(id) {
+            // 1. Sync First
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try {
+                    showToast('Checking Cloud...');
+                    await syncFromCloud();
+                } catch (e) { console.error('Sync fail', e); }
+            }
 
+            // 2. Locate Task
+            const task = tasks.find(t => t.id === id);
+            if (!task) {
+                alert("งานนี้ถูกลบไปแล้วโดยคนอื่น");
+                renderTasks();
+                return;
+            }
+
+            // 3. Security Check
             if (task.status === 'paid') {
                 const code = prompt("🔒 ใส่รหัสลบงานที่จ่ายแล้ว (del888):");
                 if (code !== 'del888') {
@@ -1112,6 +1151,7 @@
                 }
             }
 
+            // 4. Confirm Delete
             if (confirm("ต้องการลบงานนี้ใช่หรือไม่?")) {
                 tasks = tasks.filter(t => t.id !== id);
                 autoSave();
@@ -1119,9 +1159,17 @@
             }
         }
 
-        function updateJob(id, type, checked) {
+        async function updateJob(id, type, checked) {
+            // Sync before update
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try {
+                    showToast("Syncing...");
+                    await syncFromCloud();
+                } catch (e) { console.error(e); }
+            }
             const t = tasks.find(x => x.id === id);
             if (t) { t.job[type] = checked; autoSave(); renderTasks(); }
+            else { alert('Task may have been deleted.'); renderTasks(); }
         }
 
         function calculatePrice(t) {
