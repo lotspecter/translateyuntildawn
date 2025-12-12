@@ -15,7 +15,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child };
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child, getAuth, signInWithEmailAndPassword };
         window.dispatchEvent(new Event('firebaseLoaded'));
     </script>
 
@@ -760,7 +761,9 @@
     <div id="cloudModal" class="modal-overlay">
         <div class="modal-box">
             <h3>☁️ ตั้งค่า Cloud Sync (Firebase)</h3>
-            <input type="text" id="cfgFirebase" placeholder="Firebase API Key"
+            <input type="text" id="cfgEmail" placeholder="Email"
+                style="width:100%; margin-bottom:5px; padding:10px; font-family:monospace;">
+            <input type="password" id="cfgPassword" placeholder="Password"
                 style="width:100%; margin-bottom:10px; padding:10px; font-family:monospace;">
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-create" onclick="saveCloudConfig()">เชื่อมต่อ</button>
@@ -778,7 +781,7 @@
         let assignees = JSON.parse(localStorage.getItem('assignees')) || [];
         let currentPageId = localStorage.getItem('currentPageId') || 'p1';
         const defaultFirebaseConfig = {
-            apiKey: " รับ จาก url หรือ กรองลงในช่อง",
+            apiKey: "AIzaSyDs8S42T58wwbNNEiX0kV3KGtcAELAGnKo",
             authDomain: "manga-bot-db-c3261.firebaseapp.com",
             databaseURL: "https://manga-bot-db-c3261-default-rtdb.asia-southeast1.firebasedatabase.app",
             projectId: "manga-bot-db-c3261",
@@ -799,11 +802,9 @@
 
 
 
-            if (cloudConfig && cloudConfig.apiKey && window.firebaseModules) initFirebaseSystem();
+            if (window.firebaseModules) initFirebaseSystem();
 
-            // if input exists, fill it (for manual checking)
-            const ta = document.getElementById('cfgFirebase');
-            if (ta) ta.value = cloudConfig.apiKey || '';
+            if (window.firebaseModules) initFirebaseSystem();
             renderAssignees();
             renderAssigneeFilterSelect();
         });
@@ -1360,36 +1361,78 @@
         function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('active'); document.querySelector('.sidebar-overlay').classList.toggle('active'); }
 
 
-        let firebaseApp, db;
+        let firebaseApp, db, auth;
 
         // Wait for modules
         window.addEventListener('firebaseLoaded', () => {
             initFirebaseSystem();
         });
 
-        function initFirebaseSystem() {
-            if (cloudConfig && cloudConfig.apiKey) {
+        async function initFirebaseSystem() {
+            try {
+                const { initializeApp, getDatabase, getAuth, signInWithEmailAndPassword } = window.firebaseModules;
+
+                // 1. Init App with Hardcoded Config
+                cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig, apiKey: defaultFirebaseConfig.apiKey };
+
+                firebaseApp = initializeApp(cloudConfig);
+                db = getDatabase(firebaseApp);
+                auth = getAuth(firebaseApp);
+
+                // 2. Auth Logic
+                const urlParams = new URLSearchParams(window.location.search);
+                const pEmail = urlParams.get('email');
+                const pPass = urlParams.get('password');
+
+                let savedEmail = localStorage.getItem('manga_email') || "your-bot-admin@yourdomain.com";
+                let savedPass = localStorage.getItem('manga_password') || "your-secure-password";
+
+                let email = pEmail || savedEmail;
+                let password = pPass || savedPass;
+
+                // Fill Inputs
+                const inpEmail = document.getElementById('cfgEmail');
+                const inpPass = document.getElementById('cfgPassword');
+                if (inpEmail) inpEmail.value = email;
+                if (inpPass) inpPass.value = password;
+
+                console.log("Attempting Login...", email);
+
                 try {
-                    const { initializeApp, getDatabase } = window.firebaseModules;
-                    firebaseApp = initializeApp(cloudConfig);
-                    db = getDatabase(firebaseApp);
-                    setStatus('online', '✅ Firebase Ready');
+                    await signInWithEmailAndPassword(auth, email, password);
+                    setStatus('online', '✅ Logged In');
+
+                    localStorage.setItem('manga_email', email);
+                    localStorage.setItem('manga_password', password);
+
                     syncFromCloud();
-                } catch (e) {
-                    console.error("Firebase Init Error", e);
-                    setStatus('offline', '❌ Config Error');
+
+                    if (pEmail || pPass) window.history.replaceState({}, document.title, window.location.pathname);
+
+                } catch (err) {
+                    console.error("Auth Failed", err);
+                    setStatus('offline', '❌ Login Failed');
                 }
+
+            } catch (e) {
+                console.error("Firebase Init Error", e);
+                setStatus('offline', '❌ Config Error');
             }
         }
 
         function saveCloudConfig() {
             try {
-                const apiKey = document.getElementById('cfgFirebase').value.trim();
-                cloudConfig = { ...defaultFirebaseConfig, apiKey: apiKey };
+                const email = document.getElementById('cfgEmail').value.trim();
+                const password = document.getElementById('cfgPassword').value.trim();
+
+                cloudConfig = { ...defaultFirebaseConfig };
                 localStorage.setItem('cloudConfig_MangaCalendar', JSON.stringify(cloudConfig));
+                localStorage.setItem('manga_email', email);
+                localStorage.setItem('manga_password', password);
+
                 document.getElementById('cloudModal').style.display = 'none';
                 initFirebaseSystem();
-                showToast("บันทึก Config เรียบร้อย");
+                showToast("บันทึก & Login เรียบร้อย");
             } catch (e) {
                 showToast("Config ไม่ถูกต้อง", "error");
             }

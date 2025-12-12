@@ -13,7 +13,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child };
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child, getAuth, signInWithEmailAndPassword };
         window.dispatchEvent(new Event('firebaseLoaded'));
     </script>
     <style>
@@ -454,6 +455,60 @@
             opacity: 1;
             transform: translateY(0);
         }
+
+        /* Sync Status */
+        .sync-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85rem;
+            color: #666;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-left: 10px;
+            border: 1px solid #ddd;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            background-color: #bdc3c7;
+            border-radius: 50%;
+            transition: background-color 0.3s;
+        }
+
+        .status-dot.online {
+            background-color: #2ecc71;
+            box-shadow: 0 0 5px #2ecc71;
+        }
+
+        .status-dot.syncing {
+            background-color: #f1c40f;
+            animation: pulse 1s infinite;
+        }
+
+        .status-dot.offline {
+            background-color: #e74c3c;
+        }
+
+        .status-dot.error {
+            background-color: #e74c3c;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+
+            100% {
+                opacity: 1;
+            }
+        }
     </style>
 </head>
 
@@ -469,7 +524,10 @@
             <button class="btn-dark" onclick="renameCurrentPage()">✏️</button>
         </div>
 
-        <div style="display: flex; gap: 10px;">
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <div class="sync-status">
+                <div class="status-dot" id="statusDot"></div><span id="statusText">Offline</span>
+            </div>
             <button class="btn-dark" onclick="openPayerModal()">💳 คนจ่าย (Code)</button>
             <button class="btn-dark" onclick="openAssigneeModal()">👥 ผู้รับผิดชอบ</button>
             <button class="btn-cloud" onclick="document.getElementById('cloudModal').style.display='flex'">☁️
@@ -485,7 +543,9 @@
     <div id="cloudModal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title">☁️ ตั้งค่า Cloud & Webhook (Firebase)</div>
-            <input type="text" id="cfgFirebase" placeholder="Firebase API Key"
+            <input type="text" id="cfgEmail" placeholder="Email (your-bot-admin@...)"
+                style="width:100%; margin-bottom:5px; padding:10px; font-family:monospace;">
+            <input type="password" id="cfgPassword" placeholder="Password"
                 style="width:100%; margin-bottom:10px; padding:10px; font-family:monospace;">
 
 
@@ -724,7 +784,7 @@
         let pages = [], projects = [], tasks = [], assignees = [], payers = [], currentPageId = '';
         let cloudConfig = { binId: '', webhookUnpaid: '', webhookPaid: '' };
         const defaultFirebaseConfig = {
-            apiKey: " รับ จาก url หรือ กรองลงในช่อง",
+            apiKey: "AIzaSyDs8S42T58wwbNNEiX0kV3KGtcAELAGnKo",
             authDomain: "manga-bot-db-c3261.firebaseapp.com",
             databaseURL: "https://manga-bot-db-c3261-default-rtdb.asia-southeast1.firebasedatabase.app",
             projectId: "manga-bot-db-c3261",
@@ -845,20 +905,69 @@
             if (cloudConfig.apiKey && window.firebaseModules) forceSync(); // Sync on start if Firebase is configured
         }
 
-        let firebaseApp, db;
+        let firebaseApp, db, auth;
 
         window.addEventListener('firebaseLoaded', () => {
-            if (cloudConfig.apiKey) initFirebaseSystem();
+            initFirebaseSystem();
         });
 
-        function initFirebaseSystem() {
+        async function initFirebaseSystem() {
             try {
-                const { initializeApp, getDatabase } = window.firebaseModules;
-                // Filter config to only valid firebase keys if desired, or just pass cloudConfig
-                firebaseApp = initializeApp(cloudConfig);
+                const { initializeApp, getDatabase, getAuth, signInWithEmailAndPassword } = window.firebaseModules;
+
+                // 1. Initialize App (Always use default config with hardcoded key)
+                cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig, apiKey: defaultFirebaseConfig.apiKey };
+
+                if (!firebaseApp) {
+                    firebaseApp = initializeApp(cloudConfig);
+                }
                 db = getDatabase(firebaseApp);
-                console.log("Firebase Init Success");
-                forceSync(); // Sync on start
+                auth = getAuth(firebaseApp);
+
+                // 2. Check URL Params for Credentials
+                const urlParams = new URLSearchParams(window.location.search);
+                const pEmail = urlParams.get('email');
+                const pPass = urlParams.get('password');
+
+                // 3. Fallback to Local Storage or Default
+                let savedEmail = localStorage.getItem('manga_email') || "your-bot-admin@yourdomain.com";
+                let savedPass = localStorage.getItem('manga_password') || "your-secure-password";
+
+                let email = pEmail || savedEmail;
+                let password = pPass || savedPass;
+
+                // Fill Inputs if Modal Open
+                const inpEmail = document.getElementById('cfgEmail');
+                const inpPass = document.getElementById('cfgPassword');
+                if (inpEmail) inpEmail.value = email;
+                if (inpPass) inpPass.value = password;
+
+                console.log("Attempting Login with:", email);
+
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    console.log("Login Success");
+                    showToast("✅ Login Success");
+
+                    document.getElementById('statusDot').className = 'status-dot online';
+                    document.getElementById('statusText').innerText = 'Online';
+
+                    // Save successful creds
+                    localStorage.setItem('manga_email', email);
+                    localStorage.setItem('manga_password', password);
+
+                    forceSync(); // Sync on start
+
+                    // Clean URL if params existed
+                    if (pEmail || pPass) {
+                        window.history.replaceState({}, document.title, window.location.pathname);
+                    }
+
+                } catch (authErr) {
+                    console.error("Auth Failed", authErr);
+                    showToast("❌ Auth Failed: " + authErr.code);
+                }
+
             } catch (e) {
                 console.error("Firebase Init Failed", e);
             }
@@ -877,16 +986,22 @@
         // --- Cloud Info ---
         function saveCloudConfig() {
             try {
-                const apiKey = document.getElementById('cfgFirebase').value.trim();
+                const email = document.getElementById('cfgEmail').value.trim();
+                const password = document.getElementById('cfgPassword').value.trim();
+
                 // Merge webhook with config
                 const whU = document.getElementById('cfgWebhookUnpaid').value.trim();
                 const whP = document.getElementById('cfgWebhookPaid').value.trim();
 
-                cloudConfig = { ...defaultFirebaseConfig, apiKey, webhookUnpaid: whU, webhookPaid: whP };
+                cloudConfig = { ...defaultFirebaseConfig, webhookUnpaid: whU, webhookPaid: whP };
                 saveLocal();
 
+                // Trigger Re-Auth
+                localStorage.setItem('manga_email', email);
+                localStorage.setItem('manga_password', password);
                 initFirebaseSystem();
-                showToast("บันทึก Config เรียบร้อย");
+
+                showToast("บันทึกข้อมูลแล้ว กำลังเชื่อมต่อ...");
                 document.getElementById('cloudModal').style.display = 'none';
             } catch (e) {
                 alert("Config Error: " + e.message);
@@ -957,42 +1072,52 @@
 
         async function syncFromCloud() {
             if (!db) return;
-            showToast("⏳ Syncing...");
+            document.getElementById('statusDot').className = 'status-dot syncing';
+            document.getElementById('statusText').innerText = 'Syncing...';
             try {
                 const { ref, get, child } = window.firebaseModules;
                 const dbRef = ref(db);
                 const snapshot = await get(child(dbRef, 'manga_board/'));
                 if (snapshot.exists()) {
-                    const d = snapshot.val();
-                    if (d.tasks || d.pages) {
-                        pages = d.pages || [];
-                        projects = d.projects || [];
-                        tasks = d.tasks || [];
-                        assignees = d.assignees || [];
-                        payers = d.payers || [];
+                    const data = snapshot.val();
+                    if (data.pages) {
+                        pages = data.pages || [];
+                        projects = data.projects || [];
+                        tasks = data.tasks || [];
+                        assignees = data.assignees || [];
+                        payers = data.payers || [];
                         saveLocal();
                         refreshUI();
-                        showToast("✅ Synced");
+                        console.log("Cloud Loaded");
+                        showToast("⬇️ Synced");
                     }
-                } else {
-                    console.log("No data available");
-                    syncToCloud();
                 }
-            } catch (x) {
-                console.error(x);
-                showToast("❌ Sync Error");
+                document.getElementById('statusDot').className = 'status-dot online';
+                document.getElementById('statusText').innerText = 'Online';
+            } catch (e) {
+                console.error("Cloud Load Error", e);
+                document.getElementById('statusDot').className = 'status-dot offline';
+                document.getElementById('statusText').innerText = 'Offline';
             }
         }
 
         async function syncToCloud() {
             if (!db) return;
+            document.getElementById('statusDot').className = 'status-dot syncing';
+            document.getElementById('statusText').innerText = 'Saving...';
             try {
                 const { ref, set } = window.firebaseModules;
                 await set(ref(db, 'manga_board/'), {
                     pages, projects, tasks, assignees, payers, updated: new Date().toISOString()
                 });
                 console.log("Cloud Saved");
-            } catch (e) { console.error("Cloud Save Error", e); }
+                document.getElementById('statusDot').className = 'status-dot online';
+                document.getElementById('statusText').innerText = 'Online';
+            } catch (e) {
+                console.error("Cloud Save Error", e);
+                document.getElementById('statusDot').className = 'status-dot offline';
+                document.getElementById('statusText').innerText = 'Err Save';
+            }
         }
 
         function forceSync() { syncFromCloud(); }
@@ -1694,6 +1819,9 @@
         }
 
         function showToast(message, type = 'success') {
+            // Remove existing toasts to prevent overlap
+            document.querySelectorAll('.toast-notification').forEach(el => el.remove());
+
             const toast = document.createElement('div');
             toast.className = 'toast-notification';
             if (type === 'error') toast.style.backgroundColor = '#c0392b';

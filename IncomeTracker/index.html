@@ -15,7 +15,8 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child };
+        import { getAuth, signInWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child, getAuth, signInWithEmailAndPassword };
         window.dispatchEvent(new Event('firebaseLoaded'));
     </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -784,8 +785,10 @@
                     </a>
                 </div>
                 <div class="cloud-config">
-                    <label>Firebase API Key:</label>
-                    <input type="text" id="cfgFirebase" placeholder="Paste API Key here..."
+                    <label>Firebase Authentication:</label>
+                    <input type="text" id="cfgEmail" placeholder="Email"
+                        style="width:100%; padding:8px; border:1px solid #bae6fd; border-radius:4px; font-family:monospace; margin-bottom:5px; box-sizing:border-box;">
+                    <input type="password" id="cfgPassword" placeholder="Password"
                         style="width:100%; padding:8px; border:1px solid #bae6fd; border-radius:4px; font-family:monospace; margin-bottom:10px; box-sizing:border-box;">
                     <button class="btn btn-save" onclick="saveCloudConfig()">บันทึก & เชื่อมต่อ</button>
                 </div>
@@ -820,7 +823,7 @@
             { name: 'Kaichan', percent: 13 }, { name: 'Readtoon', percent: 20 }, { name: 'ReadRealm', percent: 30 }
         ];
         const defaultFirebaseConfig = {
-            apiKey: " รับ จาก url หรือ กรองลงในช่อง",
+            apiKey: "AIzaSyDs8S42T58wwbNNEiX0kV3KGtcAELAGnKo",
             authDomain: "manga-bot-db-c3261.firebaseapp.com",
             databaseURL: "https://manga-bot-db-c3261-default-rtdb.asia-southeast1.firebasedatabase.app",
             projectId: "manga-bot-db-c3261",
@@ -831,17 +834,16 @@
         let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig_IncomeTracker')) || {};
         cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig };
         let mainChartInst = null, pieChartInst = null, barChartInst = null;
-        let firebaseApp, db;
+
 
         // --- INIT ---
         document.addEventListener('DOMContentLoaded', function () {
             initCalendar(); renderSettingsTable(); populateYearSelect(); populateDashPlatformSelect(); updateForm(currentDate);
 
             // Wait for firebase
-            if (window.firebaseModules && cloudConfig.apiKey) initFirebaseSystem();
+            if (window.firebaseModules) initFirebaseSystem();
 
-            const ta = document.getElementById('cfgFirebase');
-            if (ta) ta.value = cloudConfig.apiKey || '';
+
 
             const urlParams = new URLSearchParams(window.location.search);
             const fbConfigParam = urlParams.get('firebaseConfig');
@@ -858,31 +860,73 @@
             }
         });
 
+        let firebaseApp, db, auth;
         window.addEventListener('firebaseLoaded', () => {
-            if (cloudConfig.apiKey) initFirebaseSystem();
+            initFirebaseSystem();
         });
 
-        function initFirebaseSystem() {
+        async function initFirebaseSystem() {
             try {
-                const { initializeApp, getDatabase } = window.firebaseModules;
+                const { initializeApp, getDatabase, getAuth, signInWithEmailAndPassword } = window.firebaseModules;
+
+                // 1. Hardcode Config
+                cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig, apiKey: defaultFirebaseConfig.apiKey };
+
                 firebaseApp = initializeApp(cloudConfig);
                 db = getDatabase(firebaseApp);
-                document.getElementById('statusText').innerText = 'Online';
-                document.getElementById('statusDot').className = 'status-dot online';
-                syncFromCloud(); // Initial sync
+                auth = getAuth(firebaseApp);
+
+                // 2. Auth Logic
+                const urlParams = new URLSearchParams(window.location.search);
+                const pEmail = urlParams.get('email');
+                const pPass = urlParams.get('password');
+
+                let savedEmail = localStorage.getItem('manga_email') || "your-bot-admin@yourdomain.com";
+                let savedPass = localStorage.getItem('manga_password') || "your-secure-password";
+
+                let email = pEmail || savedEmail;
+                let password = pPass || savedPass;
+
+                // Fill Inputs
+                const inpEmail = document.getElementById('cfgEmail');
+                const inpPass = document.getElementById('cfgPassword');
+                if (inpEmail) inpEmail.value = email;
+                if (inpPass) inpPass.value = password;
+
+                console.log("Attempting Login...", email);
+
+                try {
+                    await signInWithEmailAndPassword(auth, email, password);
+                    if (pEmail || pPass) window.history.replaceState({}, document.title, window.location.pathname);
+
+                    showToast("✅ Connected to Cloud");
+
+                    localStorage.setItem('manga_email', email);
+                    localStorage.setItem('manga_password', password);
+
+                    syncFromCloud();
+                } catch (err) {
+                    console.error("Auth Failed", err);
+                    showToast("❌ Cloud Login Failed");
+                }
+
             } catch (e) {
-                console.error("Firebase Init Failed", e);
-                document.getElementById('statusText').innerText = 'Error';
-                document.getElementById('statusDot').className = 'status-dot offline';
+                console.error("Init Error", e);
             }
         }
 
         // --- Firebase Sync ---
         function saveCloudConfig() {
             try {
-                const apiKey = document.getElementById('cfgFirebase').value.trim();
-                cloudConfig = { ...defaultFirebaseConfig, apiKey: apiKey };
+                const email = document.getElementById('cfgEmail').value.trim();
+                const password = document.getElementById('cfgPassword').value.trim();
+
+                cloudConfig = { ...defaultFirebaseConfig };
                 localStorage.setItem('cloudConfig_IncomeTracker', JSON.stringify(cloudConfig));
+
+                localStorage.setItem('manga_email', email);
+                localStorage.setItem('manga_password', password);
+
                 initFirebaseSystem();
                 showToast("บันทึกการตั้งค่าเรียบร้อย");
             } catch (e) {
