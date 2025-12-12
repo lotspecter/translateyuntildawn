@@ -467,7 +467,6 @@
             <button class="btn-cloud" onclick="document.getElementById('cloudModal').style.display='flex'">☁️
                 Cloud</button>
             <button class="btn-blue" onclick="saveToJSON()">💾 Backup</button>
-            <button class="btn-orange" onclick="document.getElementById('fileInput').click()">📂 Load</button>
             <button class="btn-red" onclick="resetAllData()">⚠️ Reset</button>
             <input type="file" id="fileInput" style="display: none;" onchange="loadFromJSON(this)">
         </div>
@@ -560,7 +559,10 @@
 
             <label>รหัสผ่าน (Code):</label>
             <input type="password" id="payInputCode" placeholder="ใส่รหัสของคนจ่าย..."
-                style="width:100%; margin-bottom:15px; padding:10px; box-sizing:border-box; border:1px solid #3498db;">
+                style="width:100%; margin-bottom:5px; padding:10px; box-sizing:border-box; border:1px solid #3498db;">
+
+            <label id="payLabelSlip" style="display:none; margin-top:10px; font-weight:bold;">📸 แนบสลีป (Slip):</label>
+            <input type="file" id="payInputSlip" accept="image/*" style="display:none; margin-bottom:15px; width:100%;">
 
             <div style="display:flex; gap:10px;">
                 <button class="btn-green" onclick="confirmPayment()">ยืนยัน & จ่าย</button>
@@ -823,7 +825,7 @@
             document.getElementById('cloudModal').style.display = 'none';
         }
 
-        async function sendDiscordWebhook(task, type) {
+        async function sendDiscordWebhook(task, type, file = null) {
             let url = ''; let payload = {};
             const assignee = assignees.find(a => a.id === task.assigneeId);
             const assigneeName = assignee ? assignee.name : 'Unknown';
@@ -839,7 +841,7 @@
                 // Creates New Task
                 url = cloudConfig.webhookUnpaid;
                 if (!url) return;
-                payload = { content: `**${task.title}**\nตอนที่ ${task.chapter}\n${jobStr}\n${assigneeTag}` };
+                payload = { content: `@silent **${task.title}**\nตอนที่ ${task.chapter}\n${jobStr}\n${assigneeTag}` };
 
             } else if (type === 'topay') {
                 // To Pay: Tag Payer
@@ -849,7 +851,9 @@
                 const payerTag = (payer && payer.discordId) ? `<@${payer.discordId}>` : (payer ? payer.name : 'Unknown Payer');
 
                 // Format: Title | คนรับผิดชอบ : Name \n Chapter \n Job Price \n @Payer
-                payload = { content: `**${task.title}** | คนรับผิดชอบ : **${assigneeName}**\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
+                // Assignee Name is just text here, not a ping, because Payer is being pinged at the bottom
+                // If you want Assignee to be pinged silent, we rely on @silent at start
+                payload = { content: `@silent **${task.title}** | คนรับผิดชอบ : **${assigneeName}**\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
 
             } else if (type === 'paid') {
                 // Paid: Tag Assignee
@@ -857,11 +861,18 @@
                 if (!url) return;
 
                 // Format: Title | จ่ายแล้ว \n Chapter \n ~~Job Price~~ \n @Assignee
-                payload = { content: `**${task.title}** | **จ่ายแล้ว**\nตอนที่ ${task.chapter}\n~~${jobStr} **${price} บาท**~~\n${assigneeTag}` };
+                payload = { content: `@silent **${task.title}** | **จ่ายแล้ว**\nตอนที่ ${task.chapter}\n~~${jobStr} **${price} บาท**~~\n${assigneeTag}` };
             }
 
             try {
-                await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('payload_json', JSON.stringify(payload));
+                    formData.append('file', file);
+                    await fetch(url, { method: 'POST', body: formData });
+                } else {
+                    await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                }
             } catch (e) { console.error("Webhook Error", e); }
         }
 
@@ -942,9 +953,7 @@
             if (!n) return alert("ใส่ชื่อเรื่อง");
 
             // Sync before adding to prevent overwrite
-            if (cloudConfig.binId && cloudConfig.apiKey) {
-                try { await syncFromCloud(); } catch (e) { console.error("Pre-create sync failed", e); }
-            }
+
 
             if (projects.some(p => p.pageId === currentPageId && p.name === n)) return alert("มีชื่อนี้แล้ว");
             projects.push({ name: n, color: c, pageId: currentPageId });
@@ -1038,15 +1047,7 @@
 
             if (e < s) return alert("เลขตอนผิด (End < Start)");
 
-            // Sync before adding to prevent overwrite
-            if (cloudConfig.binId && cloudConfig.apiKey) {
-                try {
-                    const savedProj = document.getElementById('projectSelect').value;
-                    await syncFromCloud();
-                    // Restore selection as refreshUI resets it
-                    if (document.getElementById('projectSelect')) document.getElementById('projectSelect').value = savedProj;
-                } catch (e) { console.error("Pre-add sync failed", e); }
-            }
+
 
             const proj = projects.find(p => p.pageId === currentPageId && p.name === n);
             const c = proj ? proj.color : '#eee';
@@ -1074,7 +1075,17 @@
         }
 
         function deleteNote(id) {
-            if (confirm("ต้องการลบงานนี้ใช่หรือไม่? (Delete Task?)")) {
+            const task = tasks.find(t => t.id === id);
+            if (!task) return;
+
+            if (task.status === 'paid') {
+                const code = prompt("🔒 ใส่รหัสลบงานที่จ่ายแล้ว (del888):");
+                if (code !== 'del888') {
+                    return alert("❌ รหัสผิด! ไม่สามารถลบได้");
+                }
+            }
+
+            if (confirm("ต้องการลบงานนี้ใช่หรือไม่?")) {
                 tasks = tasks.filter(t => t.id !== id);
                 autoSave();
                 renderTasks();
@@ -1184,8 +1195,8 @@
                     }
 
                     let delBtn = '';
-                    if (status === 'unpaid') {
-                        delBtn = `<button class="delete-btn" onclick="deleteNote('${t.id}')">×</button>`;
+                    if (status === 'unpaid' || status === 'paid') {
+                        delBtn = `<button class="delete-btn" onclick="event.stopPropagation(); deleteNote('${t.id}')">×</button>`;
                     }
 
                     el.innerHTML = `
@@ -1269,16 +1280,22 @@
             });
             if (task.payerId) sel.value = task.payerId; // Pre-select if already assigned
 
-            // Toggle Password Field
+            // Toggle Password & Slip
             const codeInput = document.getElementById('payInputCode');
             const codeLabel = document.querySelector('label[for="payInputCode"]') || codeInput.previousElementSibling;
+            const slipInput = document.getElementById('payInputSlip');
+            const slipLabel = document.getElementById('payLabelSlip');
 
             if (isPaid) {
                 codeInput.style.display = 'block';
                 if (codeLabel) codeLabel.style.display = 'block';
+                slipInput.style.display = 'block';
+                slipLabel.style.display = 'block';
             } else {
                 codeInput.style.display = 'none';
                 if (codeLabel) codeLabel.style.display = 'none';
+                slipInput.style.display = 'none';
+                slipLabel.style.display = 'none';
             }
 
             // Update button text
@@ -1312,7 +1329,11 @@
 
                 autoSave();
                 renderTasks();
-                await sendDiscordWebhook(task, dragTargetCol); // 'paid' or 'topay'
+
+                const fileInput = document.getElementById('payInputSlip');
+                const file = (dragTargetCol === 'paid' && fileInput.files.length > 0) ? fileInput.files[0] : null;
+
+                await sendDiscordWebhook(task, dragTargetCol, file);
             }
 
             document.getElementById('paymentModal').style.display = 'none';
