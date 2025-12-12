@@ -849,7 +849,10 @@
             reader.readAsText(file);
             input.value = '';
         }
-        function processCSV(csvText) {
+        async function processCSV(csvText) {
+            // Sync First
+            if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+
             const lines = csvText.split(/\r\n|\n/);
             let importedCount = 0;
             lines.forEach(line => {
@@ -1090,8 +1093,41 @@
                 if (savedSettings.find(s => s.name === name)) return alert('มีชื่อนี้แล้ว'); const percent = prompt("ค่าหัก % ปกติ:", "0"); savedSettings.push({ name: name, percent: parseFloat(percent) || 0 }); saveSettingsLocal(); renderSettingsTable();
             }
         }
-        function updateSettingPercent(index, val) { savedSettings[index].percent = parseFloat(val) || 0; saveSettingsLocal(); }
-        function removeSettingPlatform(index) { if (confirm("ลบรายชื่อนี้?")) { savedSettings.splice(index, 1); saveSettingsLocal(); renderSettingsTable(); } }
+        async function updateSettingPercent(index, val) {
+            let targetName = savedSettings[index] ? savedSettings[index].name : null;
+            if (!targetName) return;
+
+            // Sync First
+            if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+
+            // Re-find in case index shifted
+            let item = savedSettings.find(s => s.name === targetName);
+            if (item) {
+                item.percent = parseFloat(val) || 0;
+                saveSettingsLocal();
+                renderSettingsTable();
+            } else {
+                alert('รายการนี้ถูกลบไปแล้ว');
+                renderSettingsTable();
+            }
+        }
+        async function removeSettingPlatform(index) {
+            let targetName = savedSettings[index] ? savedSettings[index].name : null;
+            if (!targetName) return;
+
+            if (confirm("ลบรายชื่อนี้ (" + targetName + ")?")) {
+                if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+
+                if (savedSettings.find(s => s.name === targetName)) {
+                    savedSettings = savedSettings.filter(s => s.name !== targetName);
+                    saveSettingsLocal();
+                    renderSettingsTable();
+                } else {
+                    alert('รายการนี้ถูกลบไปแล้ว');
+                    renderSettingsTable();
+                }
+            }
+        }
         function saveSettingsLocal() { localStorage.setItem('savedSettings', JSON.stringify(savedSettings)); syncToCloud(); }
         function formatMoney(amount, compact = false) { if (compact && Number.isInteger(amount)) return amount.toLocaleString('th-TH'); return amount.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
         function showToast(message, type = 'success') { const toast = document.createElement('div'); toast.className = 'toast-notification'; if (type === 'error') toast.style.backgroundColor = '#c0392b'; toast.innerHTML = `<i class="fa-solid fa-check-circle"></i> ${message}`; document.body.appendChild(toast); requestAnimationFrame(() => toast.classList.add('show')); setTimeout(() => { toast.classList.remove('show'); setTimeout(() => toast.remove(), 300); }, 3000); }

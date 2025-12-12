@@ -695,7 +695,14 @@
         </div>
 
         <div class="main-view">
-            <div id="assigneeTabs" class="assignee-tabs"></div>
+            <div
+                style="padding: 10px 15px; background: #fff; border-bottom:1px solid #eee; display:flex; align-items:center; gap:10px;">
+                <label style="font-weight:bold; color:#555; white-space:nowrap;"><i class="fa-solid fa-filter"></i>
+                    กรองผู้รับผิดชอบ:</label>
+                <select id="assigneeFilterSelect" onchange="updateAssigneeFilter()"
+                    style="width: auto; min-width: 200px; padding: 6px; border-radius: 4px; border:1px solid #ccc;">
+                </select>
+            </div>
             <div class="calendar-wrapper">
                 <div id="calendar"></div>
             </div>
@@ -761,7 +768,7 @@
         let calendar;
         let selectedEventId = null;
         let selectedDate = null;
-        let currentAssigneeFilter = null;
+        let currentAssigneeFilter = localStorage.getItem('currentAssigneeFilter') || 'ALL';
 
         document.addEventListener('DOMContentLoaded', () => {
             initCalendar();
@@ -784,7 +791,7 @@
             document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
             if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
             renderAssignees();
-            renderAssigneeTabs();
+            renderAssigneeFilterSelect();
         });
 
         // Toast Function
@@ -822,9 +829,25 @@
                     selectedDate = info.dateStr;
                     openAddModal();
                 },
-                eventDrop: (info) => {
+                eventDrop: async (info) => {
+                    // Sync First
+                    if (cloudConfig.binId && cloudConfig.apiKey) {
+                        try {
+                            showToast("Syncing...");
+                            await syncFromCloud();
+                        } catch (e) { console.error(e); }
+                    }
+
                     let e = events.find(x => x.id === info.event.id);
-                    if (e) { e.start = info.event.startStr; saveAll(); showToast('ย้ายวันเรียบร้อย'); }
+                    if (e) {
+                        e.start = info.event.startStr;
+                        saveAll();
+                        showToast('ย้ายวันเรียบร้อย');
+                    } else {
+                        info.revert();
+                        showToast("รายการนี้ถูกลบไปแล้ว!", "error");
+                        refreshUI();
+                    }
                 },
                 eventContent: (arg) => {
                     let props = arg.event.extendedProps;
@@ -848,7 +871,7 @@
         function getFilteredEvents() {
             return events.filter(e => {
                 if (e.pageId !== currentPageId) return false;
-                if (currentAssigneeFilter && e.assigneeId !== currentAssigneeFilter) return false;
+                if (currentAssigneeFilter !== 'ALL' && e.assigneeId !== currentAssigneeFilter) return false;
                 return true;
             }).map(e => {
                 let s = series.find(s => s.id === e.seriesId);
@@ -904,38 +927,27 @@
                     newSeriesSel.appendChild(opt);
                 }
             });
-            renderAssigneeTabs();
+            renderAssigneeFilterSelect();
             renderSidebarSeriesList(); // Re-render series list to update dropdown options if assignees change
         }
 
-        function renderAssigneeTabs() {
-            let container = document.getElementById('assigneeTabs');
-            if (!container) return;
-            container.innerHTML = '';
-
-            // "All" Tab
-            let allTab = document.createElement('button');
-            allTab.className = `assignee-tab ${currentAssigneeFilter === null ? 'active' : ''}`;
-            allTab.innerHTML = '<i class="fa-solid fa-users"></i> ทั้งหมด';
-            if (currentAssigneeFilter === null) {
-                allTab.style.backgroundColor = 'var(--secondary)';
-            }
-            allTab.onclick = () => { currentAssigneeFilter = null; renderAssigneeTabs(); refreshUI(); };
-            container.appendChild(allTab);
-
+        function renderAssigneeFilterSelect() {
+            let sel = document.getElementById('assigneeFilterSelect');
+            if (!sel) return;
+            sel.innerHTML = '<option value="ALL">-- ทั้งหมด --</option>';
             assignees.forEach(a => {
-                let tab = document.createElement('button');
-                let isActive = currentAssigneeFilter === a.id;
-                tab.className = `assignee-tab ${isActive ? 'active' : ''}`;
-                tab.innerHTML = `<span style="width:10px; height:10px; border-radius:50%; background:${a.color}; border:1px solid rgba(255,255,255,0.5);"></span> ${a.name}`;
-
-                if (isActive) {
-                    tab.style.backgroundColor = a.color;
-                }
-
-                tab.onclick = () => { currentAssigneeFilter = a.id; renderAssigneeTabs(); refreshUI(); };
-                container.appendChild(tab);
+                let opt = document.createElement('option');
+                opt.value = a.id;
+                opt.textContent = a.name;
+                sel.appendChild(opt);
             });
+            sel.value = currentAssigneeFilter;
+        }
+
+        function updateAssigneeFilter() {
+            currentAssigneeFilter = document.getElementById('assigneeFilterSelect').value;
+            localStorage.setItem('currentAssigneeFilter', currentAssigneeFilter);
+            refreshUI();
         }
 
         async function addAssignee() {
@@ -1184,7 +1196,7 @@
             }
 
             document.getElementById('expBtnDel').onclick = () => {
-                if (confirm('ลบตอนนี้?')) { deleteEvent(selectedEventId); closeExpandedCard(); }
+                if (confirm('ลบตอนนี้?')) { deleteEvent(selectedEventId); }
             };
 
             let card = document.getElementById('expandedCard');
@@ -1221,7 +1233,25 @@
             renderSidebarSeriesList();
         }
 
-        function switchPage() { currentPageId = document.getElementById('pageSelect').value; saveAllLocal(); }
+        async function switchPage() {
+            let targetPageId = document.getElementById('pageSelect').value;
+            // Sync before switching
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try {
+                    showToast('Syncing Page...');
+                    await syncFromCloud();
+                } catch (e) { console.error(e); }
+            }
+
+            // Check if page still exists
+            if (pages.find(p => p.id === targetPageId)) {
+                currentPageId = targetPageId;
+            } else {
+                showToast("หน้านี้ถูกลบไปแล้ว!", "error");
+                currentPageId = pages[0].id;
+            }
+            saveAllLocal();
+        }
         async function createNewPage() {
             let name = prompt("ชื่อหน้าใหม่:");
             if (name) {
@@ -1268,8 +1298,39 @@
             showToast(`สร้างเรื่อง ${name} แล้ว`);
         }
 
-        function deleteEvent(id) { events = events.filter(e => e.id !== id); saveAll(); showToast('ลบรายการแล้ว'); }
-        function toggleRead(ev, id) { ev.preventDefault(); ev.stopPropagation(); let e = events.find(x => x.id === id); if (e) { e.isRead = !e.isRead; saveAll(); } }
+        async function deleteEvent(id) {
+            // Sync First
+            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+
+            let e = events.find(x => x.id === id);
+            if (!e) {
+                showToast('รายการนี้ถูกลบไปแล้ว', 'error');
+                closeExpandedCard();
+                refreshUI();
+                return;
+            }
+
+            events = events.filter(ev => ev.id !== id);
+            saveAll();
+            showToast('ลบรายการแล้ว');
+            closeExpandedCard(); // Ensure card is closed if open
+        }
+
+        async function toggleRead(ev, id) {
+            ev.preventDefault(); ev.stopPropagation();
+
+            // Sync First (Optional for toggleRead but safer for concurrent access)
+            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+
+            let e = events.find(x => x.id === id);
+            if (e) {
+                e.isRead = !e.isRead;
+                saveAll();
+            } else {
+                showToast('รายการนี้ถูกลบไปแล้ว', 'error');
+                refreshUI(); // Refresh to remove the ghost item
+            }
+        }
 
         function saveAll() {
             localStorage.setItem('pages', JSON.stringify(pages));
