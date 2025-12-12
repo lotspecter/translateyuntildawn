@@ -8,7 +8,16 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child };
+        window.dispatchEvent(new Event('firebaseLoaded'));
+    </script>
 
     <style>
         :root {
@@ -688,6 +697,11 @@
             <div class="settings-box">
                 <button class="btn" style="background:#27ae60; margin-bottom:10px;" onclick="exportCSV()"><i
                         class="fa-solid fa-file-csv"></i> Export CSV</button>
+                <button class="btn" style="background:#f39c12; margin-bottom:10px;" onclick="exportJSON()"><i
+                        class="fa-solid fa-file-code"></i> Export JSON (Backup)</button>
+                <button class="btn" style="background:#3498db; margin-bottom:10px;" onclick="importJSON()"><i
+                        class="fa-solid fa-file-import"></i> Import JSON</button>
+                <input type="file" id="jsonInput" accept=".json" style="display:none" onchange="handleJSONImport(this)">
                 <div class="cloud-status">
                     <div class="dot" id="statusDot"></div><span id="statusText">Local Only</span>
                 </div>
@@ -745,10 +759,9 @@
 
     <div id="cloudModal" class="modal-overlay">
         <div class="modal-box">
-            <h3>☁️ ตั้งค่า Cloud Sync</h3>
-            <input type="text" id="cfgBinId" placeholder="Bin ID" style="width:100%; margin-bottom:10px; padding:8px;">
-            <input type="password" id="cfgApiKey" placeholder="API Key"
-                style="width:100%; margin-bottom:15px; padding:8px;">
+            <h3>☁️ ตั้งค่า Cloud Sync (Firebase)</h3>
+            <input type="text" id="cfgFirebase" placeholder="Firebase API Key"
+                style="width:100%; margin-bottom:10px; padding:10px; font-family:monospace;">
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-create" onclick="saveCloudConfig()">เชื่อมต่อ</button>
                 <button class="btn" style="background:#ddd; color:#333;"
@@ -764,7 +777,17 @@
         let events = JSON.parse(localStorage.getItem('events')) || [];
         let assignees = JSON.parse(localStorage.getItem('assignees')) || [];
         let currentPageId = localStorage.getItem('currentPageId') || 'p1';
-        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig_MangaCalendar')) || { binId: '', apiKey: '' };
+        const defaultFirebaseConfig = {
+            apiKey: " รับ จาก url หรือ กรองลงในช่อง",
+            authDomain: "manga-bot-db-c3261.firebaseapp.com",
+            databaseURL: "https://manga-bot-db-c3261-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "manga-bot-db-c3261",
+            storageBucket: "manga-bot-db-c3261.firebasestorage.app",
+            messagingSenderId: "588175069162",
+            appId: "1:588175069162:web:f2f2d50d5c8a96bc726c93"
+        };
+        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig_MangaCalendar')) || {};
+        cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig };
         let calendar;
         let selectedEventId = null;
         let selectedDate = null;
@@ -774,22 +797,13 @@
             initCalendar();
             refreshUI();
 
-            // Auto-Login Logic
-            const urlParams = new URLSearchParams(window.location.search);
-            const paramBin = urlParams.get('bin');
-            const paramKey = urlParams.get('key');
 
-            if (paramBin && paramKey) {
-                cloudConfig.binId = paramBin;
-                cloudConfig.apiKey = paramKey;
-                localStorage.setItem('cloudConfig_MangaCalendar', JSON.stringify(cloudConfig));
-                window.history.replaceState({}, document.title, window.location.pathname);
-                showToast("🔑 รับกุญแจเรียบร้อย! บันทึกลงเครื่องแล้ว...");
-            }
 
-            document.getElementById('cfgBinId').value = cloudConfig.binId;
-            document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
-            if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
+            if (cloudConfig && cloudConfig.apiKey && window.firebaseModules) initFirebaseSystem();
+
+            // if input exists, fill it (for manual checking)
+            const ta = document.getElementById('cfgFirebase');
+            if (ta) ta.value = cloudConfig.apiKey || '';
             renderAssignees();
             renderAssigneeFilterSelect();
         });
@@ -831,7 +845,7 @@
                 },
                 eventDrop: async (info) => {
                     // Sync First
-                    if (cloudConfig.binId && cloudConfig.apiKey) {
+                    if (db) {
                         try {
                             showToast("Syncing...");
                             await syncFromCloud();
@@ -953,7 +967,7 @@
         async function addAssignee() {
             let name = prompt("ชื่อผู้รับผิดชอบงาน:");
             if (name) {
-                if (cloudConfig.binId && cloudConfig.apiKey) {
+                if (db) {
                     try { await syncFromCloud(); } catch (e) { }
                 }
                 assignees.push({ id: 'a' + Date.now(), name, color: '#2ecc71' }); // Default green-ish
@@ -1147,7 +1161,7 @@
             if (!ep) return showToast('ใส่เลขตอนด้วยครับ', 'error');
 
             // Sync before adding event
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try { await syncFromCloud(); } catch (e) { console.error("Pre-add sync failed", e); }
             }
 
@@ -1236,7 +1250,7 @@
         async function switchPage() {
             let targetPageId = document.getElementById('pageSelect').value;
             // Sync before switching
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try {
                     showToast('Syncing Page...');
                     await syncFromCloud();
@@ -1255,19 +1269,19 @@
         async function createNewPage() {
             let name = prompt("ชื่อหน้าใหม่:");
             if (name) {
-                if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+                if (db) { try { await syncFromCloud(); } catch (e) { } }
                 let id = 'p' + Date.now(); pages.push({ id, name }); currentPageId = id; saveAll();
             }
         }
         async function renamePage() {
-            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
             let p = pages.find(p => p.id === currentPageId); let name = prompt("เปลี่ยนชื่อหน้า:", p.name);
             if (name) { p.name = name; saveAll(); }
         }
         async function deletePage() {
             if (pages.length <= 1) return showToast('ต้องเหลืออย่างน้อย 1 หน้า', 'error');
             if (confirm("ลบหน้านี้?")) {
-                if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+                if (db) { try { await syncFromCloud(); } catch (e) { } }
                 series = series.filter(s => s.pageId !== currentPageId); events = events.filter(e => e.pageId !== currentPageId); pages = pages.filter(p => p.id !== currentPageId); currentPageId = pages[0].id; saveAll();
             }
         }
@@ -1281,7 +1295,7 @@
             if (!name) return showToast('ใส่ชื่อเรื่องก่อนครับ', 'error');
 
             // Sync before creating to avoiding overwrite
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try { await syncFromCloud(); } catch (e) { console.error("Pre-create sync failed", e); }
             }
 
@@ -1300,7 +1314,7 @@
 
         async function deleteEvent(id) {
             // Sync First
-            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             let e = events.find(x => x.id === id);
             if (!e) {
@@ -1320,7 +1334,7 @@
             ev.preventDefault(); ev.stopPropagation();
 
             // Sync First (Optional for toggleRead but safer for concurrent access)
-            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             let e = events.find(x => x.id === id);
             if (e) {
@@ -1344,40 +1358,100 @@
         }
 
         function toggleSidebar() { document.querySelector('.sidebar').classList.toggle('active'); document.querySelector('.sidebar-overlay').classList.toggle('active'); }
-        function saveCloudConfig() { cloudConfig.binId = document.getElementById('cfgBinId').value.trim(); cloudConfig.apiKey = document.getElementById('cfgApiKey').value.trim(); localStorage.setItem('cloudConfig_MangaCalendar', JSON.stringify(cloudConfig)); syncFromCloud(); document.getElementById('cloudModal').style.display = 'none'; }
+
+
+        let firebaseApp, db;
+
+        // Wait for modules
+        window.addEventListener('firebaseLoaded', () => {
+            initFirebaseSystem();
+        });
+
+        function initFirebaseSystem() {
+            if (cloudConfig && cloudConfig.apiKey) {
+                try {
+                    const { initializeApp, getDatabase } = window.firebaseModules;
+                    firebaseApp = initializeApp(cloudConfig);
+                    db = getDatabase(firebaseApp);
+                    setStatus('online', '✅ Firebase Ready');
+                    syncFromCloud();
+                } catch (e) {
+                    console.error("Firebase Init Error", e);
+                    setStatus('offline', '❌ Config Error');
+                }
+            }
+        }
+
+        function saveCloudConfig() {
+            try {
+                const apiKey = document.getElementById('cfgFirebase').value.trim();
+                cloudConfig = { ...defaultFirebaseConfig, apiKey: apiKey };
+                localStorage.setItem('cloudConfig_MangaCalendar', JSON.stringify(cloudConfig));
+                document.getElementById('cloudModal').style.display = 'none';
+                initFirebaseSystem();
+                showToast("บันทึก Config เรียบร้อย");
+            } catch (e) {
+                showToast("Config ไม่ถูกต้อง", "error");
+            }
+        }
 
         async function syncFromCloud() {
-            if (!cloudConfig.binId || !cloudConfig.apiKey) { showToast("กรุณาใส่ Bin ID และ API Key", "error"); return; }
+            if (!db) return;
             setStatus('syncing', '⏳ กำลังโหลด...');
             try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}/latest`, { headers: { 'X-Access-Key': cloudConfig.apiKey, 'X-Bin-Meta': 'false' } });
-                if (!res.ok) throw new Error();
-                const d = await res.json();
-                if (d.pages || d.series || d.events) {
-                    pages = d.pages || [{ id: 'p1', name: 'หน้าหลัก' }];
-                    series = d.series || []; events = d.events || []; assignees = d.assignees || [];
-                    let pageExists = pages.find(p => p.id === currentPageId);
-                    if (!pageExists && pages.length > 0) currentPageId = pages[0].id;
-                    saveAllLocal(); setStatus('online', '✅ Online');
-                    showToast(`ดึงข้อมูลสำเร็จ (เรื่อง: ${series.length}, ตอน: ${events.length})`);
+                const { ref, get, child } = window.firebaseModules;
+                const dbRef = ref(db);
+                const snapshot = await get(child(dbRef, 'manga_calender/')); // Note: User specified 'manga_calender' spelling
+                if (snapshot.exists()) {
+                    const d = snapshot.val();
+                    if (d.pages || d.series || d.events) {
+                        pages = d.pages || [{ id: 'p1', name: 'หน้าหลัก' }];
+                        series = d.series || []; events = d.events || []; assignees = d.assignees || [];
+                        let pageExists = pages.find(p => p.id === currentPageId);
+                        if (!pageExists && pages.length > 0) currentPageId = pages[0].id;
+                        saveAllLocal(); setStatus('online', '✅ Synced');
+                        showToast(`ดึงข้อมูลสำเร็จ (Title: ${series.length}, Event: ${events.length})`);
+                    }
                 } else {
-                    console.log("Cloud empty, syncing local to cloud...");
-                    showToast("Cloud ว่างเปล่า: กำลังเริ่มระบบ Cloud...", "success");
-                    syncToCloud();
+                    console.log("No data available");
+                    syncToCloud(); // Init path
                 }
-            } catch (e) { setStatus('offline', '❌ Error'); showToast("ดึงข้อมูลไม่ได้", "error"); }
+            } catch (error) {
+                console.error(error);
+                setStatus('offline', '❌ Scan Error');
+            }
         }
 
         async function syncToCloud() {
-            if (!cloudConfig.binId) return;
+            if (!db) return;
             setStatus('syncing', '☁️ Saving...');
             try {
-                await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, {
-                    method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Access-Key': cloudConfig.apiKey },
-                    body: JSON.stringify({ pages, series, events, assignees, updated: new Date() })
+                const { ref, set } = window.firebaseModules;
+                await set(ref(db, 'manga_calender/'), {
+                    pages, series, events, assignees, updated: new Date().toISOString()
                 });
                 setStatus('online', '✅ Saved');
-            } catch (e) { setStatus('offline', '❌ Error'); }
+            } catch (e) {
+                console.error("Save failed", e);
+                setStatus('offline', '❌ Save Error');
+            }
+        }
+
+        // Auto-Login Parsing (Updated for Firebase Config)
+        // Expecting ?firebaseConfig={...} encoded in URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const fbConfigParam = urlParams.get('firebaseConfig');
+        if (fbConfigParam) {
+            try {
+                const decoded = JSON.parse(decodeURIComponent(fbConfigParam));
+                cloudConfig = { ...defaultFirebaseConfig, ...decoded };
+                localStorage.setItem('cloudConfig_MangaCalendar', JSON.stringify(cloudConfig));
+                // Remove param from URL
+                window.history.replaceState({}, document.title, window.location.pathname);
+                showToast("🔑 รับ Config เรียบร้อย!");
+            } catch (e) {
+                console.error("Invalid Config Param");
+            }
         }
 
         function saveAllLocal() {
@@ -1388,6 +1462,65 @@
             localStorage.setItem('currentPageId', currentPageId);
             refreshUI();
             renderAssignees();
+        }
+
+        function exportJSON() {
+            const data = {
+                pages: pages,
+                series: series,
+                events: events,
+                assignees: assignees,
+                exportedAt: new Date().toISOString()
+            };
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `manga_calendar_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast("Backup JSON เรียบร้อย");
+        }
+
+        function importJSON() {
+            document.getElementById('jsonInput').click();
+        }
+
+        function handleJSONImport(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.pages && data.series && data.events) {
+                        const confirmMsg = `พบข้อมูล:\n- Pages: ${data.pages.length}\n- Series: ${data.series.length}\n- Events: ${data.events.length}\n\nต้องการเขียนทับข้อมูลปัจจุบันหรือไม่? (การกระทำนี้จะบันทึกลง Cloud ด้วย)`;
+                        if (confirm(confirmMsg)) {
+                            pages = data.pages;
+                            series = data.series;
+                            events = data.events;
+                            assignees = data.assignees || [];
+                            // Ensure integrity
+                            if (!pages || pages.length === 0) pages = [{ id: 'p1', name: 'หน้าหลัก' }];
+                            if (!pages.find(p => p.id === currentPageId)) currentPageId = pages[0].id;
+
+                            saveAll();
+                            showToast('Import ข้อมูลเรียบร้อยแล้ว');
+                        }
+                    } else {
+                        showToast('ไฟล์ JSON ไม่ถูกต้อง (ข้อมูลไม่ครบ)', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('เกิดข้อผิดพลาดในการอ่านไฟล์', 'error');
+                }
+                input.value = ''; // Reset input
+            };
+            reader.readAsText(file);
         }
 
         function exportCSV() {

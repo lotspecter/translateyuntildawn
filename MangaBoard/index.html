@@ -8,6 +8,14 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child };
+        window.dispatchEvent(new Event('firebaseLoaded'));
+    </script>
     <style>
         :root {
             --bg-color: #2c3e50;
@@ -467,19 +475,19 @@
             <button class="btn-cloud" onclick="document.getElementById('cloudModal').style.display='flex'">☁️
                 Cloud</button>
             <button class="btn-blue" onclick="saveToJSON()">💾 Backup</button>
+            <button class="btn-orange" onclick="secureImportJSON()">📂 Import</button>
             <button class="btn-red" onclick="resetAllData()">⚠️ Reset</button>
-            <input type="file" id="fileInput" style="display: none;" onchange="loadFromJSON(this)">
+            <input type="file" id="fileInput" style="display: none;" onchange="handleJSONImportBoard(this)">
         </div>
     </div>
 
     <!-- Cloud Modal -->
     <div id="cloudModal" class="modal-overlay">
         <div class="modal-box">
-            <div class="modal-title">☁️ ตั้งค่า Cloud & Webhook</div>
-            <input type="text" id="cfgBinId" placeholder="Bin ID (JSONBin)"
-                style="width:100%; margin-bottom:10px; padding:8px; box-sizing:border-box;">
-            <input type="password" id="cfgApiKey" placeholder="API Key"
-                style="width:100%; margin-bottom:10px; padding:8px; box-sizing:border-box;">
+            <div class="modal-title">☁️ ตั้งค่า Cloud & Webhook (Firebase)</div>
+            <input type="text" id="cfgFirebase" placeholder="Firebase API Key"
+                style="width:100%; margin-bottom:10px; padding:10px; font-family:monospace;">
+
 
             <label style="display:block; margin-top:10px; font-weight:bold; font-size:0.9rem;">Webhook
                 (งานใหม่/ยังไม่จ่าย):</label>
@@ -714,7 +722,16 @@
     <script>
         // Data Structures
         let pages = [], projects = [], tasks = [], assignees = [], payers = [], currentPageId = '';
-        let cloudConfig = { binId: '', apiKey: '', webhookUnpaid: '', webhookPaid: '' };
+        let cloudConfig = { binId: '', webhookUnpaid: '', webhookPaid: '' };
+        const defaultFirebaseConfig = {
+            apiKey: " รับ จาก url หรือ กรองลงในช่อง",
+            authDomain: "manga-bot-db-c3261.firebaseapp.com",
+            databaseURL: "https://manga-bot-db-c3261-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "manga-bot-db-c3261",
+            storageBucket: "manga-bot-db-c3261.firebasestorage.app",
+            messagingSenderId: "588175069162",
+            appId: "1:588175069162:web:f2f2d50d5c8a96bc726c93"
+        };
         const STORAGE_KEY = 'mangaTracker_V5_Ultimate';
 
         // Globals -> Added topay sort state
@@ -749,7 +766,7 @@
                     assignees = data.assignees || [];
                     payers = data.payers || [];
                     currentPageId = data.currentPageId || (pages[0] ? pages[0].id : '');
-                    cloudConfig = data.cloudConfig || { binId: '', apiKey: '', webhookUnpaid: '', webhookPaid: '' };
+                    cloudConfig = data.cloudConfig || { binId: '', webhookUnpaid: '', webhookPaid: '' };
                 } catch (e) {
                     console.error("JSON Parse Error", e);
                     // Fallback init
@@ -794,14 +811,57 @@
                 setTimeout(() => showToast("🔑 รับกุญแจเรียบร้อย! กำลังดึงข้อมูล..."), 500);
             }
 
+            // Auto-Login Firebase
+            const fbConfigParam = urlParams.get('firebaseConfig');
+            if (fbConfigParam) {
+                try {
+                    const decoded = JSON.parse(decodeURIComponent(fbConfigParam));
+                    // Preserve webhooks if they exist
+                    const oldWhU = cloudConfig.webhookUnpaid;
+                    const oldWhP = cloudConfig.webhookPaid;
+                    cloudConfig = { ...decoded, webhookUnpaid: oldWhU, webhookPaid: oldWhP };
+                    saveLocal();
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    showToast("🔑 Firebase Config Loaded");
+                } catch (e) { console.error("URL Config Error", e); }
+            }
+
+            // Apply Default Config if missing (except apiKey)
+            // Merge defaults
+            cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig };
+
             // Init Config UI
-            const elBin = document.getElementById('cfgBinId'); if (elBin) elBin.value = cloudConfig.binId || '';
-            const elKey = document.getElementById('cfgApiKey'); if (elKey) elKey.value = cloudConfig.apiKey || '';
             const elU = document.getElementById('cfgWebhookUnpaid'); if (elU) elU.value = cloudConfig.webhookUnpaid || '';
             const elP = document.getElementById('cfgWebhookPaid'); if (elP) elP.value = cloudConfig.webhookPaid || '';
 
-            refreshUI();
-            if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
+            // Init Firebase if config exists
+            if (cloudConfig.apiKey && window.firebaseModules) initFirebaseSystem();
+
+            // Fill Input
+            const ta = document.getElementById('cfgFirebase');
+            if (ta) ta.value = cloudConfig.apiKey || '';
+
+            refreshUI(); // This was renderPageSelect, renderProjectDropdowns, renderAssignees, renderSummaryFilterOptions, renderTasks, renderPayersDropdown
+            if (cloudConfig.apiKey && window.firebaseModules) forceSync(); // Sync on start if Firebase is configured
+        }
+
+        let firebaseApp, db;
+
+        window.addEventListener('firebaseLoaded', () => {
+            if (cloudConfig.apiKey) initFirebaseSystem();
+        });
+
+        function initFirebaseSystem() {
+            try {
+                const { initializeApp, getDatabase } = window.firebaseModules;
+                // Filter config to only valid firebase keys if desired, or just pass cloudConfig
+                firebaseApp = initializeApp(cloudConfig);
+                db = getDatabase(firebaseApp);
+                console.log("Firebase Init Success");
+                forceSync(); // Sync on start
+            } catch (e) {
+                console.error("Firebase Init Failed", e);
+            }
         }
 
         function autoSave() {
@@ -816,13 +876,21 @@
 
         // --- Cloud Info ---
         function saveCloudConfig() {
-            cloudConfig.binId = document.getElementById('cfgBinId').value.trim();
-            cloudConfig.apiKey = document.getElementById('cfgApiKey').value.trim();
-            cloudConfig.webhookUnpaid = document.getElementById('cfgWebhookUnpaid').value.trim();
-            cloudConfig.webhookPaid = document.getElementById('cfgWebhookPaid').value.trim();
-            autoSave();
-            syncFromCloud();
-            document.getElementById('cloudModal').style.display = 'none';
+            try {
+                const apiKey = document.getElementById('cfgFirebase').value.trim();
+                // Merge webhook with config
+                const whU = document.getElementById('cfgWebhookUnpaid').value.trim();
+                const whP = document.getElementById('cfgWebhookPaid').value.trim();
+
+                cloudConfig = { ...defaultFirebaseConfig, apiKey, webhookUnpaid: whU, webhookPaid: whP };
+                saveLocal();
+
+                initFirebaseSystem();
+                showToast("บันทึก Config เรียบร้อย");
+                document.getElementById('cloudModal').style.display = 'none';
+            } catch (e) {
+                alert("Config Error: " + e.message);
+            }
         }
 
         async function sendDiscordWebhook(task, type, file = null) {
@@ -888,52 +956,46 @@
         }
 
         async function syncFromCloud() {
-            if (!cloudConfig.binId || !cloudConfig.apiKey) return;
+            if (!db) return;
+            showToast("⏳ Syncing...");
             try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}/latest`, { headers: { 'X-Access-Key': cloudConfig.apiKey, 'X-Bin-Meta': 'false' } });
-                if (!res.ok) throw new Error();
-                const d = await res.json();
-                if (d.pages) {
-                    pages = d.pages; projects = d.projects || []; tasks = d.tasks || []; assignees = d.assignees || []; payers = d.payers || [];
-
-                    // Smart Page Sync: Keep current page if it exists in new data, otherwise use cloud's current or default
-                    const pageStillExists = pages.find(p => p.id === currentPageId);
-                    if (!pageStillExists) {
-                        currentPageId = d.currentPageId || pages[0].id;
+                const { ref, get, child } = window.firebaseModules;
+                const dbRef = ref(db);
+                const snapshot = await get(child(dbRef, 'manga_board/'));
+                if (snapshot.exists()) {
+                    const d = snapshot.val();
+                    if (d.tasks || d.pages) {
+                        pages = d.pages || [];
+                        projects = d.projects || [];
+                        tasks = d.tasks || [];
+                        assignees = d.assignees || [];
+                        payers = d.payers || [];
+                        saveLocal();
+                        refreshUI();
+                        showToast("✅ Synced");
                     }
-                    // else: Keep local currentPageId
-
-                    // Sync Webhooks from Cloud if available
-                    if (d.cloudConfig) {
-                        if (d.cloudConfig.webhookUnpaid) cloudConfig.webhookUnpaid = d.cloudConfig.webhookUnpaid;
-                        if (d.cloudConfig.webhookPaid) cloudConfig.webhookPaid = d.cloudConfig.webhookPaid;
-                        // Update UI inputs
-                        const elU = document.getElementById('cfgWebhookUnpaid'); if (elU) elU.value = cloudConfig.webhookUnpaid;
-                        const elP = document.getElementById('cfgWebhookPaid'); if (elP) elP.value = cloudConfig.webhookPaid;
-                    }
-
-                    // Ensure existing tasks have a status that fits the new workflow after sync
-                    tasks.forEach(t => {
-                        if (!t.status) t.status = 'unpaid';
-                        if (t.status === 'unpaid' && t.payerId) t.status = 'topay';
-                    });
-                    refreshUI();
+                } else {
+                    console.log("No data available");
+                    syncToCloud();
                 }
-            } catch (e) { console.log(e); }
+            } catch (x) {
+                console.error(x);
+                showToast("❌ Sync Error");
+            }
         }
 
         async function syncToCloud() {
-            if (!cloudConfig.binId || !cloudConfig.apiKey) return;
+            if (!db) return;
             try {
-                await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'X-Access-Key': cloudConfig.apiKey },
-                    body: JSON.stringify({ pages, projects, tasks, assignees, payers, currentPageId, cloudConfig, updated: new Date() })
+                const { ref, set } = window.firebaseModules;
+                await set(ref(db, 'manga_board/'), {
+                    pages, projects, tasks, assignees, payers, updated: new Date().toISOString()
                 });
-            } catch (e) { console.log(e); }
+                console.log("Cloud Saved");
+            } catch (e) { console.error("Cloud Save Error", e); }
         }
 
-        function forceSync() { syncFromCloud(); showToast('Downloading...'); }
+        function forceSync() { syncFromCloud(); }
 
         function refreshUI() {
             renderPageSelect();
@@ -952,7 +1014,7 @@
         }
         async function switchPage() {
             const targetPageId = document.getElementById('pageSelect').value;
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try {
                     showToast('Syncing Page...');
                     await syncFromCloud();
@@ -972,12 +1034,12 @@
         async function createNewPage() {
             const n = prompt("ชื่อหน้าใหม่:");
             if (n) {
-                if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+                if (db) { try { await syncFromCloud(); } catch (e) { } }
                 const id = 'page_' + Date.now(); pages.push({ id, name: n }); currentPageId = id; autoSave(); refreshUI();
             }
         }
         async function renameCurrentPage() {
-            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
             const cur = pages.find(p => p.id === currentPageId); const n = prompt("เปลี่ยนชื่อ:", cur.name);
             if (n) { cur.name = n; autoSave(); refreshUI(); }
         }
@@ -988,7 +1050,7 @@
             if (!n) return alert("ใส่ชื่อเรื่อง");
 
             // Sync before adding to prevent overwrite
-            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             if (projects.some(p => p.pageId === currentPageId && p.name === n)) return alert("มีชื่อนี้แล้ว");
             projects.push({ name: n, color: c, pageId: currentPageId });
@@ -997,7 +1059,7 @@
         async function deleteCurrentProject() {
             const n = document.getElementById('projectSelect').value;
             // Sync before delete
-            if (cloudConfig.binId && cloudConfig.apiKey) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             if (projects.some(p => p.pageId === currentPageId && p.name === n)) {
                 if (n && confirm(`ซ่อนเรื่อง "${n}"? (งานจะไม่หาย แต่จะซ่อนจากรายการ)`)) {
@@ -1090,7 +1152,7 @@
             if (e < s) return alert("เลขตอนผิด (End < Start)");
 
             // Sync before adding (Now safe to do because syncFromCloud preserves page)
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try {
                     const savedProj = document.getElementById('projectSelect').value;
                     const savedAss = document.getElementById('assigneeSelect').value;
@@ -1128,7 +1190,7 @@
 
         async function deleteNote(id) {
             // 1. Sync First
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try {
                     showToast('Checking Cloud...');
                     await syncFromCloud();
@@ -1161,7 +1223,7 @@
 
         async function updateJob(id, type, checked) {
             // Sync before update
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try {
                     showToast("Syncing...");
                     await syncFromCloud();
@@ -1307,7 +1369,7 @@
             const colId = ev.currentTarget.id;
 
             // Sync before move
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try { await syncFromCloud(); } catch (e) { }
             }
 
@@ -1388,7 +1450,7 @@
 
         async function confirmPayment() {
             // Sync before paying
-            if (cloudConfig.binId && cloudConfig.apiKey) {
+            if (db) {
                 try { await syncFromCloud(); } catch (e) { }
             }
 
@@ -1422,6 +1484,83 @@
             }
 
             document.getElementById('paymentModal').style.display = 'none';
+        }
+
+
+
+        // --- JSON Backup System ---
+        function exportJSONBoard() {
+            const data = {
+                pages: pages,
+                projects: projects,
+                tasks: tasks,
+                assignees: assignees,
+                payers: payers,
+                exportedAt: new Date().toISOString()
+            };
+            const jsonStr = JSON.stringify(data, null, 2);
+            const blob = new Blob([jsonStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = `manga_board_backup_${new Date().toISOString().slice(0, 10)}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+            showToast("Backup JSON เรียบร้อย");
+        }
+
+        function secureImportJSON() {
+            const code = prompt("ใส่รหัสเพื่อนำเข้าข้อมูล:");
+            if (code === "Reset888") {
+                document.getElementById('fileInput').click();
+            } else {
+                if (code) alert("รหัสผิด (Wrong Code)");
+            }
+        }
+
+
+        function importJSONBoard() {
+            document.getElementById('jsonInputBoard').click();
+        }
+
+        function handleJSONImportBoard(input) {
+            const file = input.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function (e) {
+                try {
+                    const data = JSON.parse(e.target.result);
+                    if (data.pages && data.projects && data.tasks) {
+                        const confirmMsg = `พบข้อมูล:\n- Pages: ${data.pages.length}\n- Projects: ${data.projects.length}\n- Tasks: ${data.tasks.length}\n\nต้องการเขียนทับข้อมูลปัจจุบันหรือไม่? (การกระทำนี้จะบันทึกลง Cloud ด้วย)`;
+                        if (confirm(confirmMsg)) {
+                            pages = data.pages;
+                            projects = data.projects;
+                            tasks = data.tasks;
+                            assignees = data.assignees || [];
+                            payers = data.payers || [];
+
+                            // Ensure integrity
+                            if (!pages || pages.length === 0) pages = [{ id: 'p1', name: 'หน้าหลัก' }];
+                            if (!pages.find(p => p.id === currentPageId)) currentPageId = pages[0].id;
+
+                            saveLocal();
+                            syncToCloud();
+                            refreshUI();
+                            showToast('Import ข้อมูลเรียบร้อยแล้ว');
+                        }
+                    } else {
+                        showToast('ไฟล์ JSON ไม่ถูกต้อง (ข้อมูลไม่ครบ)', 'error');
+                    }
+                } catch (err) {
+                    console.error(err);
+                    showToast('เกิดข้อผิดพลาดในการอ่านไฟล์', 'error');
+                }
+                input.value = ''; // Reset input
+            };
+            reader.readAsText(file);
         }
 
         function cancelPayment() {

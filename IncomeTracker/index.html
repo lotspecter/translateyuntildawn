@@ -8,7 +8,16 @@
 
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;800&display=swap" rel="stylesheet">
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+    <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getDatabase, ref, set, get, child } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+        window.firebaseModules = { initializeApp, getDatabase, ref, set, get, child };
+        window.dispatchEvent(new Event('firebaseLoaded'));
+    </script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
@@ -771,12 +780,13 @@
                     <h3 style="color:var(--secondary); margin:0;"><i class="fa-solid fa-cloud"></i> Cloud Sync</h3>
                     <a href="#" onclick="openJsonBinLink(event)"
                         style="font-size:0.85rem; color:#3498db; text-decoration:none;">
-                        <i class="fa-solid fa-external-link-alt"></i> เปิดดูข้อมูลบนเว็บ
+                        <i class="fa-solid fa-external-link-alt"></i> เปิด Console
                     </a>
                 </div>
                 <div class="cloud-config">
-                    <label>Bin ID:</label> <input type="text" id="cfgBinId" placeholder="ID จาก JsonBin.io">
-                    <label>X-Access-Key:</label> <input type="password" id="cfgApiKey" placeholder="API Key">
+                    <label>Firebase API Key:</label>
+                    <input type="text" id="cfgFirebase" placeholder="Paste API Key here..."
+                        style="width:100%; padding:8px; border:1px solid #bae6fd; border-radius:4px; font-family:monospace; margin-bottom:10px; box-sizing:border-box;">
                     <button class="btn btn-save" onclick="saveCloudConfig()">บันทึก & เชื่อมต่อ</button>
                 </div>
                 <button class="btn" style="background:#666; color:white;" onclick="forceLoadCloud()">📥
@@ -809,35 +819,144 @@
         let savedSettings = JSON.parse(localStorage.getItem('savedSettings')) || [
             { name: 'Kaichan', percent: 13 }, { name: 'Readtoon', percent: 20 }, { name: 'ReadRealm', percent: 30 }
         ];
-        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig')) || { binId: '', apiKey: '' };
+        const defaultFirebaseConfig = {
+            apiKey: " รับ จาก url หรือ กรองลงในช่อง",
+            authDomain: "manga-bot-db-c3261.firebaseapp.com",
+            databaseURL: "https://manga-bot-db-c3261-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "manga-bot-db-c3261",
+            storageBucket: "manga-bot-db-c3261.firebasestorage.app",
+            messagingSenderId: "588175069162",
+            appId: "1:588175069162:web:f2f2d50d5c8a96bc726c93"
+        };
+        let cloudConfig = JSON.parse(localStorage.getItem('cloudConfig_IncomeTracker')) || {};
+        cloudConfig = { ...defaultFirebaseConfig, ...cloudConfig };
         let mainChartInst = null, pieChartInst = null, barChartInst = null;
+        let firebaseApp, db;
 
         // --- INIT ---
         document.addEventListener('DOMContentLoaded', function () {
             initCalendar(); renderSettingsTable(); populateYearSelect(); populateDashPlatformSelect(); updateForm(currentDate);
 
+            // Wait for firebase
+            if (window.firebaseModules && cloudConfig.apiKey) initFirebaseSystem();
+
+            const ta = document.getElementById('cfgFirebase');
+            if (ta) ta.value = cloudConfig.apiKey || '';
+
             const urlParams = new URLSearchParams(window.location.search);
-            const paramBin = urlParams.get('bin'); const paramKey = urlParams.get('key');
-            if (paramBin && paramKey) {
-                cloudConfig.binId = paramBin; cloudConfig.apiKey = paramKey;
-                localStorage.setItem('cloudConfig', JSON.stringify(cloudConfig));
-                window.history.replaceState({}, document.title, window.location.pathname);
-                showToast("รับกุญแจเรียบร้อย! กำลังโหลด...");
+            const fbConfigParam = urlParams.get('firebaseConfig');
+            if (fbConfigParam) {
+                try {
+                    const decoded = JSON.parse(decodeURIComponent(fbConfigParam));
+                    cloudConfig = { ...defaultFirebaseConfig, ...decoded };
+                    localStorage.setItem('cloudConfig_IncomeTracker', JSON.stringify(cloudConfig));
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                    showToast("🔑 Firebase Config Loaded");
+                    if (ta) ta.value = JSON.stringify(cloudConfig, null, 2);
+                    initFirebaseSystem();
+                } catch (e) { console.error("URL Params Error", e); }
             }
-            document.getElementById('cfgBinId').value = cloudConfig.binId;
-            document.getElementById('cfgApiKey').value = cloudConfig.apiKey;
-            if (cloudConfig.binId && cloudConfig.apiKey) syncFromCloud();
         });
+
+        window.addEventListener('firebaseLoaded', () => {
+            if (cloudConfig.apiKey) initFirebaseSystem();
+        });
+
+        function initFirebaseSystem() {
+            try {
+                const { initializeApp, getDatabase } = window.firebaseModules;
+                firebaseApp = initializeApp(cloudConfig);
+                db = getDatabase(firebaseApp);
+                document.getElementById('statusText').innerText = 'Online';
+                document.getElementById('statusDot').className = 'status-dot online';
+                syncFromCloud(); // Initial sync
+            } catch (e) {
+                console.error("Firebase Init Failed", e);
+                document.getElementById('statusText').innerText = 'Error';
+                document.getElementById('statusDot').className = 'status-dot offline';
+            }
+        }
+
+        // --- Firebase Sync ---
+        function saveCloudConfig() {
+            try {
+                const apiKey = document.getElementById('cfgFirebase').value.trim();
+                cloudConfig = { ...defaultFirebaseConfig, apiKey: apiKey };
+                localStorage.setItem('cloudConfig_IncomeTracker', JSON.stringify(cloudConfig));
+                initFirebaseSystem();
+                showToast("บันทึกการตั้งค่าเรียบร้อย");
+            } catch (e) {
+                showToast("Config ไม่ถูกต้อง", "error");
+            }
+        }
+
+        async function syncFromCloud() {
+            if (!db) return;
+            const dot = document.getElementById('statusDot');
+            const txt = document.getElementById('statusText');
+            if (dot) dot.className = 'status-dot syncing';
+            if (txt) txt.innerText = 'Syncing...';
+
+            try {
+                const { ref, get, child } = window.firebaseModules;
+                const dbRef = ref(db);
+                const snapshot = await get(child(dbRef, 'manga_income/')); // path: manga_income/
+
+                if (snapshot.exists()) {
+                    const d = snapshot.val();
+                    if (d.data || d.settings) {
+                        // Merge or replace? Let's replace to be consistent with cloud truth
+                        if (d.data) incomeData = d.data;
+                        if (d.settings) savedSettings = d.settings;
+                        saveLocal();
+                        refreshAll();
+                        calculateTotal();
+                        renderSettingsTable();
+                        showToast("⬇️ Data Synced", "success");
+                    }
+                } else {
+                    console.log("No data available");
+                    syncToCloud(); // Init
+                }
+                if (dot) dot.className = 'status-dot online';
+                if (txt) txt.innerText = 'Online';
+            } catch (error) {
+                console.error(error);
+                if (dot) dot.className = 'status-dot offline';
+                if (txt) txt.innerText = 'Sync Failed';
+            }
+        }
+
+        async function syncToCloud() {
+            if (!db) return;
+            const dot = document.getElementById('statusDot');
+            if (dot) dot.className = 'status-dot syncing';
+
+            try {
+                const { ref, set } = window.firebaseModules;
+                await set(ref(db, 'manga_income/'), {
+                    data: incomeData,
+                    settings: savedSettings,
+                    updated: new Date().toISOString()
+                });
+                if (dot) dot.className = 'status-dot online';
+            } catch (e) {
+                console.error("Save failed", e);
+                if (dot) dot.className = 'status-dot offline';
+            }
+        }
+
+        function forceLoadCloud() { syncFromCloud(); }
+
+        function saveLocal() {
+            localStorage.setItem('incomeData', JSON.stringify(incomeData));
+            localStorage.setItem('savedSettings', JSON.stringify(savedSettings));
+        }
 
         // --- NEW FUNCTION: OPEN JSONBIN LINK ---
         function openJsonBinLink(e) {
             e.preventDefault();
-            const binId = document.getElementById('cfgBinId').value.trim();
-            if (binId) {
-                window.open(`https://jsonbin.io/app/bins/`, '_blank');
-            } else {
-                window.open('https://jsonbin.io/login', '_blank');
-            }
+            // JSONBin is deprecated.
         }
 
         // --- CSV LOGIC ---
@@ -851,7 +970,8 @@
         }
         async function processCSV(csvText) {
             // Sync First
-            if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+            // Sync First
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             const lines = csvText.split(/\r\n|\n/);
             let importedCount = 0;
@@ -940,34 +1060,8 @@
         }
 
         // --- CLOUD ---
-        function setSyncStatus(status, msg) { const dot = document.getElementById('statusDot'); const text = document.getElementById('statusText'); dot.className = 'status-dot ' + status; text.innerText = msg; }
-        function saveCloudConfig() {
-            cloudConfig.binId = document.getElementById('cfgBinId').value.trim(); cloudConfig.apiKey = document.getElementById('cfgApiKey').value.trim();
-            localStorage.setItem('cloudConfig', JSON.stringify(cloudConfig));
-            if (cloudConfig.binId) syncFromCloud(); else showToast('บันทึก Config (Local Only)', 'success');
-        }
-        async function syncFromCloud() {
-            if (!cloudConfig.binId) return; setSyncStatus('syncing', 'Check...');
-            try {
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, { headers: { 'X-Access-Key': cloudConfig.apiKey } });
-                if (!res.ok) throw new Error('Connect Failed');
-                const json = await res.json(); const cloudRecord = json.record;
-                const cloudHasData = cloudRecord.incomeData && Object.keys(cloudRecord.incomeData).length > 0;
-                const localHasData = Object.keys(incomeData).length > 0;
-                if (!cloudHasData && localHasData) { await syncToCloud(); showToast("อัปโหลดข้อมูลขึ้น Cloud แล้ว"); }
-                else if (cloudHasData) { incomeData = cloudRecord.incomeData || {}; savedSettings = cloudRecord.savedSettings || savedSettings; localStorage.setItem('incomeData', JSON.stringify(incomeData)); localStorage.setItem('savedSettings', JSON.stringify(savedSettings)); setSyncStatus('online', 'Online'); refreshAll(); }
-                else { setSyncStatus('online', 'Online (New)'); }
-            } catch (e) { console.error(e); setSyncStatus('offline', 'Offline'); }
-        }
-        async function syncToCloud() {
-            if (!cloudConfig.binId) return; setSyncStatus('syncing', 'Saving...');
-            try {
-                const payload = { incomeData: (incomeData && Object.keys(incomeData).length > 0) ? incomeData : {}, savedSettings: (savedSettings && savedSettings.length > 0) ? savedSettings : [], lastUpdate: new Date().toISOString(), appVersion: "Mobile 1.0" };
-                const res = await fetch(`https://api.jsonbin.io/v3/b/${cloudConfig.binId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Access-Key': cloudConfig.apiKey }, body: JSON.stringify(payload) });
-                if (!res.ok) throw new Error('Save Failed'); setSyncStatus('online', 'Saved');
-            } catch (e) { setSyncStatus('offline', 'Save Err'); }
-        }
-        function forceLoadCloud() { syncFromCloud(); }
+        // --- CLOUD (Legacy specific helpers removed) ---
+
 
         // --- CALENDAR ---
         function initCalendar() {
@@ -1028,14 +1122,15 @@
             document.querySelectorAll('.platform-item').forEach(row => { const name = row.getAttribute('data-name'); const grossStr = row.querySelector('.inp-gross').value; const percentStr = row.querySelector('.inp-percent').value; if (grossStr !== '') { const gross = parseFloat(grossStr) || 0; const percent = parseFloat(percentStr) || 0; const net = gross * (1 - (percent / 100)); dataToSave.push({ name, gross, percent, net }); } });
 
             // Sync before saving to prevent overwrite
-            if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { console.error("Pre-save sync failed", e); } }
+            // Sync before saving to prevent overwrite
+            if (db) { try { await syncFromCloud(); } catch (e) { console.error("Pre-save sync failed", e); } }
 
             if (dataToSave.length > 0) incomeData[currentDate] = dataToSave; else delete incomeData[currentDate];
             localStorage.setItem('incomeData', JSON.stringify(incomeData)); refreshAll(); syncToCloud(); showToast('บันทึกเรียบร้อย'); if (window.innerWidth <= 768) toggleSidebar();
         }
         async function deleteCurrentDateData() {
             if (confirm('ลบข้อมูลวันนี้?')) {
-                if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+                if (db) { try { await syncFromCloud(); } catch (e) { } }
                 delete incomeData[currentDate]; localStorage.setItem('incomeData', JSON.stringify(incomeData)); refreshAll(); syncToCloud(); if (window.innerWidth <= 768) toggleSidebar();
             }
         }
@@ -1089,7 +1184,7 @@
         }
         async function addNewSettingPlatform() {
             const name = prompt("ชื่อเว็บใหม่:"); if (name) {
-                if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+                if (db) { try { await syncFromCloud(); } catch (e) { } }
                 if (savedSettings.find(s => s.name === name)) return alert('มีชื่อนี้แล้ว'); const percent = prompt("ค่าหัก % ปกติ:", "0"); savedSettings.push({ name: name, percent: parseFloat(percent) || 0 }); saveSettingsLocal(); renderSettingsTable();
             }
         }
@@ -1098,7 +1193,7 @@
             if (!targetName) return;
 
             // Sync First
-            if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             // Re-find in case index shifted
             let item = savedSettings.find(s => s.name === targetName);
@@ -1116,7 +1211,7 @@
             if (!targetName) return;
 
             if (confirm("ลบรายชื่อนี้ (" + targetName + ")?")) {
-                if (cloudConfig.binId) { try { await syncFromCloud(); } catch (e) { } }
+                if (db) { try { await syncFromCloud(); } catch (e) { } }
 
                 if (savedSettings.find(s => s.name === targetName)) {
                     savedSettings = savedSettings.filter(s => s.name !== targetName);
