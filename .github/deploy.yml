@@ -1,0 +1,48 @@
+name: Deploy Multi-App to Pages
+
+on:
+  push:
+    branches: ["main"] # เช็คชื่อ Branch ว่าเป็น main หรือ master นะครับ
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 🔥 จุดสำคัญ: สั่งแก้รหัสในทั้ง 3 โฟลเดอร์พร้อมกัน
+      - name: Inject API Key to all apps
+        env:
+          MY_SECRET: ${{ secrets.FIREBASE_API_KEY }} # ดึงรหัสจากตู้เซฟ GitHub
+        run: |
+          # แทนที่ใน IncomeTracker
+          sed -i "s|FIREBASE_KEY_AUTO_REPLACE|$MY_SECRET|g" IncomeTracker/index.html
+          
+          # แทนที่ใน MangaBoard
+          sed -i "s|FIREBASE_KEY_AUTO_REPLACE|$MY_SECRET|g" MangaBoard/index.html
+          
+          # แทนที่ใน MangaCalendar
+          sed -i "s|FIREBASE_KEY_AUTO_REPLACE|$MY_SECRET|g" MangaCalendar/index.html
+          
+          echo "✅ ใส่รหัสลับเสร็จเรียบร้อยทั้ง 3 ไฟล์!"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '.' # อัปโหลดทุกโฟลเดอร์ขึ้นไป
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
