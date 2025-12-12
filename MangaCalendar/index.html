@@ -25,8 +25,15 @@
             box-sizing: border-box;
         }
 
-        body {
+        body,
+        button,
+        input,
+        select,
+        textarea {
             font-family: 'Sarabun', sans-serif;
+        }
+
+        body {
             margin: 0;
             background-color: var(--bg);
             height: 100vh;
@@ -194,6 +201,28 @@
         .btn-manage {
             background: #f39c12;
             margin-top: 5px;
+        }
+
+        .btn-add {
+            background: #2980b9;
+            font-size: 1.1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+        }
+
+        .btn-add:hover {
+            background: #3498db;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .btn-cancel {
+            background: #cbd5e1;
+            color: #334155;
+            font-size: 1.1rem;
+        }
+
+        .btn-cancel:hover {
+            background: #94a3b8;
         }
 
         /* ปุ่มจัดการเรื่อง */
@@ -628,6 +657,11 @@
                 </div>
                 <div class="row"><input type="text" id="newSeriesOrig" placeholder="🔗 Link เว็บต้นฉบับ"></div>
                 <div class="row"><input type="text" id="newSeriesRT" placeholder="🦊 Link ReadToon"></div>
+                <div class="row">
+                    <select id="newSeriesAssignee" style="color:#555;">
+                        <option value="">-- ผู้รับผิดชอบหลัก (ถ้ามี) --</option>
+                    </select>
+                </div>
                 <button class="btn btn-create" onclick="createSeries()">+ สร้างเรื่อง</button>
                 <!--
                 <button class="btn btn-manage" onclick="openManageSeriesModal()"><i class="fa-solid fa-list-check"></i>
@@ -685,8 +719,8 @@
             </select>
 
             <div style="display:flex; gap:10px;">
-                <button class="btn btn-add" onclick="confirmAddEvent()">บันทึก</button>
-                <button class="btn" style="background:#ddd; color:#333;"
+                <button class="btn btn-add" style="flex:1;" onclick="confirmAddEvent()">บันทึก</button>
+                <button class="btn btn-cancel" style="flex:1;"
                     onclick="document.getElementById('addModal').style.display='none'">ยกเลิก</button>
             </div>
         </div>
@@ -844,7 +878,15 @@
         function renderAssignees() {
             let el = document.getElementById('assigneeList');
             el.innerHTML = '';
+
+            // Populate New Series Assignee Dropdown
+            let newSeriesSel = document.getElementById('newSeriesAssignee');
+            if (newSeriesSel) {
+                newSeriesSel.innerHTML = '<option value="">-- ผู้รับผิดชอบหลัก (ถ้ามี) --</option>';
+            }
+
             assignees.forEach(a => {
+                // Sidebar list
                 let div = document.createElement('div');
                 div.className = 'assignee-item';
                 div.innerHTML = `
@@ -853,8 +895,17 @@
                     <button class="btn-icon-del" onclick="deleteAssignee('${a.id}')"><i class="fa-solid fa-trash"></i></button>
                 `;
                 el.appendChild(div);
+
+                // Option for new series
+                if (newSeriesSel) {
+                    let opt = document.createElement('option');
+                    opt.value = a.id;
+                    opt.textContent = a.name;
+                    newSeriesSel.appendChild(opt);
+                }
             });
             renderAssigneeTabs();
+            renderSidebarSeriesList(); // Re-render series list to update dropdown options if assignees change
         }
 
         function renderAssigneeTabs() {
@@ -923,6 +974,12 @@
                 return;
             }
 
+            // Generate Assignee Options String
+            let assigneeOptions = '<option value="">- ไม่ระบุ -</option>';
+            assignees.forEach(a => {
+                assigneeOptions += `<option value="${a.id}">${a.name}</option>`;
+            });
+
             currentSeries.forEach(s => {
                 let div = document.createElement('div');
                 div.style.borderBottom = '1px solid #eee';
@@ -936,9 +993,22 @@
                 topRow.style.gap = '8px';
                 topRow.style.marginBottom = '6px';
                 topRow.innerHTML = `
-                    <input type="color" value="${s.color}" onchange="updateSeriesColor('${s.id}', this.value)" style="width:24px; height:24px; border:none; padding:0; cursor:pointer;">
+                    <input type="color" value="${s.color}" onchange="updateSeriesColor('${s.id}', this.value)" style="width:24px; height:24px; border:none; padding:0; cursor:pointer; flex-shrink:0;">
                     <span style="font-weight:bold; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${s.name}">${s.name}</span>
                 `;
+
+                // Assignee Selector
+                let assigneeRow = document.createElement('div');
+                assigneeRow.style.marginBottom = '6px';
+                assigneeRow.innerHTML = `
+                     <select style="width:100%; font-size:0.8rem; padding:2px;" onchange="updateSeriesDefaultAssignee('${s.id}', this.value)">
+                        ${assigneeOptions}
+                     </select>
+                `;
+                // Set selected value
+                let sel = assigneeRow.querySelector('select');
+                if (s.defaultAssigneeId) sel.value = s.defaultAssigneeId;
+
 
                 // Actions
                 let actionRow = document.createElement('div');
@@ -958,6 +1028,7 @@
                 actionRow.innerHTML = `${origBtn} ${rtBtn} ${delBtn}`;
 
                 div.appendChild(topRow);
+                div.appendChild(assigneeRow);
                 div.appendChild(actionRow);
                 container.appendChild(div);
             });
@@ -997,6 +1068,14 @@
             }
         }
 
+        function updateSeriesDefaultAssignee(id, assignId) {
+            let s = series.find(x => x.id === id);
+            if (s) {
+                s.defaultAssigneeId = assignId;
+                saveAll();
+            }
+        }
+
         function deleteSeriesById(id) {
             if (confirm("⚠️ ต้องการลบเรื่องนี้และตอนทั้งหมดในปฏิทินทิ้งหรือไม่?")) {
                 series = series.filter(s => s.id !== id);
@@ -1026,6 +1105,22 @@
                 opt.value = a.id; opt.textContent = a.name;
                 selAss.appendChild(opt);
             });
+
+            // Auto-select assignee logic
+            sel.onchange = () => {
+                let s = series.find(x => x.id === sel.value);
+                if (s && s.defaultAssigneeId) {
+                    selAss.value = s.defaultAssigneeId;
+                } else {
+                    selAss.value = "";
+                }
+            };
+
+            // Trigger once for initial series
+            if (sel.value) {
+                let s = series.find(x => x.id === sel.value);
+                if (s && s.defaultAssigneeId) selAss.value = s.defaultAssigneeId;
+            }
 
             document.getElementById('addEpNum').value = '';
             document.getElementById('addModal').style.display = 'flex';
@@ -1152,6 +1247,7 @@
             let color = document.getElementById('newSeriesColor').value;
             let orig = document.getElementById('newSeriesOrig').value.trim();
             let rt = document.getElementById('newSeriesRT').value.trim();
+            let defAssign = document.getElementById('newSeriesAssignee') ? document.getElementById('newSeriesAssignee').value : "";
             if (!name) return showToast('ใส่ชื่อเรื่องก่อนครับ', 'error');
 
             // Sync before creating to avoiding overwrite
@@ -1161,7 +1257,9 @@
 
             if (orig && !orig.startsWith('http')) orig = 'https://' + orig;
             if (rt && !rt.startsWith('http')) rt = 'https://' + rt;
-            let newSeries = { id: 's' + Date.now(), name, color, pageId: currentPageId, origLink: orig, rtLink: rt };
+            if (orig && !orig.startsWith('http')) orig = 'https://' + orig;
+            if (rt && !rt.startsWith('http')) rt = 'https://' + rt;
+            let newSeries = { id: 's' + Date.now(), name, color, pageId: currentPageId, origLink: orig, rtLink: rt, defaultAssigneeId: defAssign };
             series.push(newSeries);
             document.getElementById('newSeriesName').value = '';
             document.getElementById('newSeriesOrig').value = '';
