@@ -841,7 +841,7 @@
                 // Creates New Task
                 url = cloudConfig.webhookUnpaid;
                 if (!url) return;
-                payload = { content: `@silent **${task.title}**\nตอนที่ ${task.chapter}\n${jobStr}\n${assigneeTag}` };
+                payload = { content: `**${task.title}**\nตอนที่ ${task.chapter}\n${jobStr}\n${assigneeTag}` };
 
             } else if (type === 'topay') {
                 // To Pay: Tag Payer
@@ -853,7 +853,7 @@
                 // Format: Title | คนรับผิดชอบ : Name \n Chapter \n Job Price \n @Payer
                 // Assignee Name is just text here, not a ping, because Payer is being pinged at the bottom
                 // If you want Assignee to be pinged silent, we rely on @silent at start
-                payload = { content: `@silent **${task.title}** | คนรับผิดชอบ : **${assigneeName}**\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
+                payload = { content: `**${task.title}** | คนรับผิดชอบ : @silen ${assigneeTag}\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
 
             } else if (type === 'paid') {
                 // Paid: Tag Assignee
@@ -861,7 +861,7 @@
                 if (!url) return;
 
                 // Format: Title | จ่ายแล้ว \n Chapter \n ~~Job Price~~ \n @Assignee
-                payload = { content: `@silent **${task.title}** | **จ่ายแล้ว**\nตอนที่ ${task.chapter}\n~~${jobStr} **${price} บาท**~~\n${assigneeTag}` };
+                payload = { content: `*${task.title}** | **จ่ายแล้ว**\nตอนที่ ${task.chapter}\n~~${jobStr} **${price} บาท**~~\n${assigneeTag}` };
             }
 
             try {
@@ -884,7 +884,13 @@
                 const d = await res.json();
                 if (d.pages) {
                     pages = d.pages; projects = d.projects || []; tasks = d.tasks || []; assignees = d.assignees || []; payers = d.payers || [];
-                    currentPageId = d.currentPageId || pages[0].id;
+
+                    // Smart Page Sync: Keep current page if it exists in new data, otherwise use cloud's current or default
+                    const pageStillExists = pages.find(p => p.id === currentPageId);
+                    if (!pageStillExists) {
+                        currentPageId = d.currentPageId || pages[0].id;
+                    }
+                    // else: Keep local currentPageId
 
                     // Sync Webhooks from Cloud if available
                     if (d.cloudConfig) {
@@ -1047,7 +1053,17 @@
 
             if (e < s) return alert("เลขตอนผิด (End < Start)");
 
-
+            // Sync before adding (Now safe to do because syncFromCloud preserves page)
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try {
+                    const savedProj = document.getElementById('projectSelect').value;
+                    const savedAss = document.getElementById('assigneeSelect').value;
+                    await syncFromCloud();
+                    // Restore UI selection
+                    if (document.getElementById('projectSelect')) document.getElementById('projectSelect').value = savedProj;
+                    if (document.getElementById('assigneeSelect')) document.getElementById('assigneeSelect').value = savedAss;
+                } catch (e) { console.error("Pre-add sync failed", e); }
+            }
 
             const proj = projects.find(p => p.pageId === currentPageId && p.name === n);
             const c = proj ? proj.color : '#eee';
@@ -1226,10 +1242,15 @@
         function leaveDrop(ev) { ev.currentTarget.classList.remove('drag-over'); }
         function drag(ev) { ev.dataTransfer.setData("text", ev.target.id); }
 
-        function drop(ev) {
+        async function drop(ev) {
             ev.preventDefault(); ev.currentTarget.classList.remove('drag-over');
             const id = ev.dataTransfer.getData("text");
             const colId = ev.currentTarget.id;
+
+            // Sync before move
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try { await syncFromCloud(); } catch (e) { }
+            }
 
             const task = tasks.find(t => t.id === id);
             if (!task) return;
@@ -1307,6 +1328,11 @@
         }
 
         async function confirmPayment() {
+            // Sync before paying
+            if (cloudConfig.binId && cloudConfig.apiKey) {
+                try { await syncFromCloud(); } catch (e) { }
+            }
+
             const payerId = document.getElementById('paySelectPayer').value;
             const code = document.getElementById('payInputCode').value;
 
