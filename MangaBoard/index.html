@@ -853,7 +853,7 @@
                 // Format: Title | คนรับผิดชอบ : Name \n Chapter \n Job Price \n @Payer
                 // Assignee Name is just text here, not a ping, because Payer is being pinged at the bottom
                 // If you want Assignee to be pinged silent, we rely on @silent at start
-                payload = { content: `**${task.title}** | คนรับผิดชอบ : @silen ${assigneeTag}\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
+                payload = { content: `**${task.title}** | คนรับผิดชอบ : @silent ${assigneeTag}\nตอนที่ ${task.chapter}\n${jobStr} **${price} บาท**\n${payerTag}` };
 
             } else if (type === 'paid') {
                 // Paid: Tag Assignee
