@@ -992,10 +992,14 @@
                         let itemsHtml = props.items.map(item => {
                             let isRead = item.isRead;
                             let readClass = isRead ? 'read' : '';
+                            let sColor = item.seriesColor || '#999';
                             return `
                                 <div class="group-item-mini ${readClass}">
-                                    <span style="overflow:hidden; text-overflow:ellipsis;">${item.title} #${item.chapter}</span>
-                                    ${isRead ? '<i class="fa-solid fa-check" style="color:#27ae60; font-size:0.7rem;"></i>' : ''}
+                                    <div style="display:flex; align-items:center; overflow:hidden; white-space:nowrap;">
+                                        <span style="display:inline-block; width:6px; height:6px; background:${sColor}; border-radius:50%; margin-right:4px; flex-shrink:0;"></span>
+                                        <span style="overflow:hidden; text-overflow:ellipsis;">${item.displayTitle} #${item.chapter}</span>
+                                    </div>
+                                    ${isRead ? '<i class="fa-solid fa-check" style="color:#27ae60; font-size:0.7rem; margin-left:2px;"></i>' : ''}
                                 </div>
                             `;
                         }).join('');
@@ -1043,7 +1047,8 @@
                     assigneeColor: assignee ? assignee.color : '#999',
                     assigneeName: assignee ? assignee.name : 'Unknown',
                     seriesOrig: s ? s.origLink : '',
-                    seriesRt: s ? s.rtLink : ''
+                    seriesRt: s ? s.rtLink : '',
+                    seriesColor: s ? s.color : '#999'
                 };
             });
 
@@ -1374,10 +1379,14 @@
                 let linkOrig = item.link || item.seriesOrig;
                 let linkRt = item.seriesRt || `https://readtoon.com/?q=${encodeURIComponent(item.displayTitle)}`;
                 let isRead = item.isRead;
+                let sColor = item.seriesColor || '#999';
 
                 let html = `
                     <div class="exp-item-header">
-                        <span style="${isRead ? 'text-decoration:line-through; color:#999;' : ''}">${item.displayTitle} #${item.chapter}</span>
+                        <span style="display:flex; align-items:center; ${isRead ? 'text-decoration:line-through; color:#999;' : ''}">
+                            <span style="display:inline-block; width:10px; height:10px; background:${sColor}; border-radius:50%; margin-right:8px;"></span>
+                            ${item.displayTitle} #${item.chapter}
+                        </span>
                         <div style="cursor:pointer;" onclick="toggleReadEvent('${item.id}', this)">
                             ${isRead ? '<i class="fa-solid fa-square-check" style="color:#27ae60;"></i>' : '<i class="fa-regular fa-square" style="color:#ccc;"></i>'}
                         </div>
