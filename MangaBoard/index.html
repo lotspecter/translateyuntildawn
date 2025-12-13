@@ -510,6 +510,78 @@
             }
         }
     </style>
+    <style>
+        /* --- Mobile Responsive --- */
+        @media (max-width: 768px) {
+            body {
+                height: auto;
+                min-height: 100vh;
+                overflow-y: auto;
+            }
+
+            .main-content {
+                height: auto;
+                overflow: visible;
+                padding: 10px;
+            }
+
+            .page-nav {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .page-controls {
+                flex-wrap: wrap;
+                justify-content: center;
+                width: 100%;
+            }
+
+            /* Main Board Stack */
+            .board {
+                flex-direction: column;
+                overflow-x: hidden;
+                overflow-y: visible;
+                gap: 20px;
+                padding-bottom: 20px;
+            }
+
+            .column {
+                min-width: 100%;
+                max-height: 500px;
+                overflow-y: auto;
+                margin-bottom: 10px;
+            }
+
+            /* Inputs */
+            .control-panel {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .input-group {
+                width: 100%;
+                flex-wrap: wrap;
+                box-sizing: border-box;
+            }
+
+            .input-group input,
+            .input-group select {
+                flex: 1;
+            }
+
+            /* Hide non-essential buttons text on mobile or use icons? 
+               For now, wrap them */
+            .btn-dark,
+            .btn-blue,
+            .btn-red,
+            .btn-green,
+            .btn-cloud,
+            .btn-orange {
+                font-size: 0.9rem;
+                padding: 8px;
+            }
+        }
+    </style>
 </head>
 
 <body>
@@ -956,7 +1028,7 @@
                     localStorage.setItem('manga_email', email);
                     localStorage.setItem('manga_password', password);
 
-                    forceSync(); // Sync on start
+                    await forceSync(); // Sync on start
 
                     // Clean URL if params existed
                     if (pEmail || pPass) {
@@ -984,7 +1056,7 @@
         }
 
         // --- Cloud Info ---
-        function saveCloudConfig() {
+        async function saveCloudConfig() {
             try {
                 const email = document.getElementById('cfgEmail').value.trim();
                 const password = document.getElementById('cfgPassword').value.trim();
@@ -999,7 +1071,18 @@
                 // Trigger Re-Auth
                 localStorage.setItem('manga_email', email);
                 localStorage.setItem('manga_password', password);
-                initFirebaseSystem();
+
+                await initFirebaseSystem();
+
+                // Re-apply webhooks (in case syncFromCloud overwrote them with old cloud data)
+                cloudConfig.webhookUnpaid = whU;
+                cloudConfig.webhookPaid = whP;
+                saveLocal();
+
+                // Push new config to cloud
+                if (db) {
+                    await syncToCloud();
+                }
 
                 showToast("บันทึกข้อมูลแล้ว กำลังเชื่อมต่อ...");
                 document.getElementById('cloudModal').style.display = 'none';
@@ -1086,6 +1169,16 @@
                         tasks = data.tasks || [];
                         assignees = data.assignees || [];
                         payers = data.payers || [];
+
+                        // Sync Cloud Config (Webhooks)
+                        if (data.cloudConfig) {
+                            cloudConfig.webhookUnpaid = data.cloudConfig.webhookUnpaid || '';
+                            cloudConfig.webhookPaid = data.cloudConfig.webhookPaid || '';
+                            // Refresh UI Inputs
+                            const elU = document.getElementById('cfgWebhookUnpaid'); if (elU) elU.value = cloudConfig.webhookUnpaid;
+                            const elP = document.getElementById('cfgWebhookPaid'); if (elP) elP.value = cloudConfig.webhookPaid;
+                        }
+
                         saveLocal();
                         refreshUI();
                         console.log("Cloud Loaded");
@@ -1108,7 +1201,7 @@
             try {
                 const { ref, set } = window.firebaseModules;
                 await set(ref(db, 'manga_board/'), {
-                    pages, projects, tasks, assignees, payers, updated: new Date().toISOString()
+                    pages, projects, tasks, assignees, payers, cloudConfig, updated: new Date().toISOString()
                 });
                 console.log("Cloud Saved");
                 document.getElementById('statusDot').className = 'status-dot online';
@@ -1120,7 +1213,7 @@
             }
         }
 
-        function forceSync() { syncFromCloud(); }
+        function forceSync() { return syncFromCloud(); }
 
         function refreshUI() {
             renderPageSelect();
