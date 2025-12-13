@@ -620,6 +620,104 @@
             margin-bottom: 5px;
             font-size: 0.9rem;
         }
+
+        /* --- Grouped Event Frame --- */
+        .assignee-group-frame {
+            border-radius: 4px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            background: white;
+            border: 2px solid transparent;
+            margin-bottom: 2px;
+            transition: transform 0.1s;
+        }
+
+        .assignee-group-frame:hover {
+            transform: scale(1.02);
+            z-index: 10;
+        }
+
+        .assignee-header {
+            font-size: 0.75rem;
+            padding: 3px 6px;
+            color: #fff;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .group-items-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1px;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .group-item-mini {
+            font-size: 0.8rem;
+            padding: 2px 6px;
+            color: #333;
+            /* background: rgba(0,0,0,0.02); */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+        }
+
+        .group-item-mini:last-child {
+            border-bottom: none;
+        }
+
+        .group-item-mini.read {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+
+        /* Expanded List Items */
+        .exp-item-row {
+            display: flex;
+            flex-direction: column;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            gap: 5px;
+        }
+
+        .exp-item-row:last-child {
+            border-bottom: none;
+        }
+
+        .exp-item-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1rem;
+        }
+
+        .exp-item-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .btn-xxs {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            border: none;
+            color: white;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
     </style>
 
 
@@ -630,14 +728,22 @@
 
     <div id="expandOverlay" onclick="closeExpandedCard()"></div>
     <div id="expandedCard">
-        <div id="expTitle" class="expand-title">Title</div>
-        <div id="expSubtitle" class="expand-subtitle">Chapter info</div>
-        <div id="expAssignee" class="expand-assignee"></div>
-        <a id="expBtnOrig" href="#" target="_blank" class="expand-btn bg-link"><i class="fa-solid fa-link"></i>
-            เว็บต้นฉบับ</a>
-        <a id="expBtnRT" href="#" target="_blank" class="expand-btn bg-rt"><i class="fa-solid fa-book-open"></i>
-            ReadToon</a>
-        <button id="expBtnDel" class="expand-btn bg-del"><i class="fa-solid fa-trash"></i> ลบ</button>
+        <!-- New Structure for Group Content -->
+        <div id="expHeader" style="border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:10px;">
+            <div id="expTitle" class="expand-title">Assignee Name</div>
+            <div id="expSubtitle" class="expand-subtitle">Date Info</div>
+        </div>
+        <div id="expList" style="max-height: 300px; overflow-y: auto;">
+            <!-- Items injected here -->
+        </div>
+        <!-- Single item actions (Legacy support or Hidden) -->
+        <div id="expSingleActions" style="display:none; flex-direction:column; gap:8px;">
+            <a id="expBtnOrig" href="#" target="_blank" class="expand-btn bg-link"><i class="fa-solid fa-link"></i>
+                เว็บต้นฉบับ</a>
+            <a id="expBtnRT" href="#" target="_blank" class="expand-btn bg-rt"><i class="fa-solid fa-book-open"></i>
+                ReadToon</a>
+            <button id="expBtnDel" class="expand-btn bg-del"><i class="fa-solid fa-trash"></i> ลบ</button>
+        </div>
     </div>
 
     <div class="page-nav">
@@ -853,27 +959,63 @@
                         } catch (e) { console.error(e); }
                     }
 
-                    let e = events.find(x => x.id === info.event.id);
-                    if (e) {
-                        e.start = info.event.startStr;
+                    // Handle Group Drag
+                    let props = info.event.extendedProps;
+                    if (props.isGroup && props.items) {
+                        // Move ALL items in group
+                        props.items.forEach(itemConfig => {
+                            let realEvent = events.find(x => x.id === itemConfig.id);
+                            if (realEvent) realEvent.start = info.event.startStr;
+                        });
                         saveAll();
-                        showToast('ย้ายวันเรียบร้อย');
+                        showToast(`ย้าย ${props.items.length} รายการเรียบร้อย`);
                     } else {
-                        info.revert();
-                        showToast("รายการนี้ถูกลบไปแล้ว!", "error");
-                        refreshUI();
+                        // Fallback for single event (if any)
+                        let e = events.find(x => x.id === info.event.id);
+                        if (e) {
+                            e.start = info.event.startStr;
+                            saveAll();
+                            showToast('ย้ายวันเรียบร้อย');
+                        } else {
+                            info.revert();
+                            showToast("รายการนี้ถูกลบไปแล้ว!", "error");
+                            refreshUI();
+                        }
                     }
                 },
                 eventContent: (arg) => {
                     let props = arg.event.extendedProps;
-                    let readClass = props.isRead ? 'read' : '';
-                    let borderColor = props.assigneeColor || 'transparent'; // Get color
-                    let html = `
-                        <div class="event-card ${readClass}" style="background-color:${arg.event.backgroundColor}; border-left-color:${borderColor};"> <!-- Apply border color -->
-                            <div style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${arg.event.title}</div>
-                            <div class="event-check" onclick="toggleRead(event, '${arg.event.id}')"><i class="fa-solid fa-check"></i></div>
-                        </div>`;
-                    return { html: html };
+                    // Group Rendering
+                    if (props.isGroup) {
+                        let color = props.assigneeColor;
+                        let name = props.assigneeName;
+                        let itemsHtml = props.items.map(item => {
+                            let isRead = item.isRead;
+                            let readClass = isRead ? 'read' : '';
+                            return `
+                                <div class="group-item-mini ${readClass}">
+                                    <span style="overflow:hidden; text-overflow:ellipsis;">${item.title} #${item.chapter}</span>
+                                    ${isRead ? '<i class="fa-solid fa-check" style="color:#27ae60; font-size:0.7rem;"></i>' : ''}
+                                </div>
+                            `;
+                        }).join('');
+
+                        let html = `
+                            <div class="assignee-group-frame" style="border-color:${color};">
+                                <div class="assignee-header" style="background:${color};">
+                                    <span>${name}</span>
+                                    <span style="font-size:0.7rem; background:rgba(0,0,0,0.2); padding:1px 4px; border-radius:10px;">${props.items.length}</span>
+                                </div>
+                                <div class="group-items-list">
+                                    ${itemsHtml}
+                                </div>
+                            </div>
+                        `;
+                        return { html: html };
+                    }
+
+                    // Fallback (Should not happen with current logic, but keeping safe)
+                    return { html: `<div>${arg.event.title}</div>` };
                 },
                 eventClick: (info) => {
                     info.jsEvent.preventDefault();
@@ -884,29 +1026,56 @@
         }
 
         function getFilteredEvents() {
-            return events.filter(e => {
+            // 1. Filter Raw Events
+            let rawEvents = events.filter(e => {
                 if (e.pageId !== currentPageId) return false;
                 if (currentAssigneeFilter !== 'ALL' && e.assigneeId !== currentAssigneeFilter) return false;
                 return true;
-            }).map(e => {
+            });
+
+            // 2. Attach metadata (Series Name, Assignee Color) to raw events for easier rendering later
+            rawEvents = rawEvents.map(e => {
                 let s = series.find(s => s.id === e.seriesId);
                 let assignee = assignees.find(a => a.id === e.assigneeId);
-                let title = `${e.title} #${e.chapter}`;
-                // Removed assignee name from title to keep it clean, relying on the strip and detail view
-                // if (assignee) title += ` (${assignee.name})`; 
                 return {
-                    id: e.id, title: title, start: e.start,
-                    backgroundColor: s ? s.color : '#999',
-                    url: e.link || undefined,
-                    extendedProps: {
-                        isRead: e.isRead,
-                        seriesName: e.title,
-                        originalLink: e.link,
-                        seriesId: e.seriesId,
-                        chapter: e.chapter,
+                    ...e, // copy raw props
+                    displayTitle: s ? s.name : e.title,
+                    assigneeColor: assignee ? assignee.color : '#999',
+                    assigneeName: assignee ? assignee.name : 'Unknown',
+                    seriesOrig: s ? s.origLink : '',
+                    seriesRt: s ? s.rtLink : ''
+                };
+            });
+
+            // 3. Group by Date + Assignee
+            let groups = {};
+            rawEvents.forEach(e => {
+                let key = `${e.start}_${e.assigneeId || 'none'}`;
+                if (!groups[key]) {
+                    groups[key] = {
+                        start: e.start,
                         assigneeId: e.assigneeId,
-                        assigneeName: assignee ? assignee.name : '',
-                        assigneeColor: assignee ? assignee.color : 'transparent'
+                        assigneeName: e.assigneeName,
+                        assigneeColor: e.assigneeColor,
+                        items: []
+                    };
+                }
+                groups[key].items.push(e);
+            });
+
+            // 4. Convert Groups to FullCalendar Events
+            return Object.values(groups).map(g => {
+                return {
+                    id: `g_${g.start}_${g.assigneeId}`,
+                    start: g.start,
+                    title: g.assigneeName, // Not visible but good for a11y
+                    backgroundColor: 'transparent',
+                    borderColor: 'transparent',
+                    extendedProps: {
+                        isGroup: true,
+                        assigneeName: g.assigneeName,
+                        assigneeColor: g.assigneeColor,
+                        items: g.items
                     }
                 };
             });
@@ -1185,48 +1354,99 @@
 
         function showExpandedCard(calEvent, element) {
             let props = calEvent.extendedProps;
-            selectedEventId = calEvent.id;
-            let s = series.find(x => x.id === props.seriesId);
-            document.getElementById('expTitle').textContent = props.seriesName;
-            document.getElementById('expSubtitle').textContent = `ตอนที่ ${props.chapter} • ${calEvent.start.toLocaleDateString('th-TH')}`;
+            let container = document.getElementById('expandedCard');
+            let listContainer = document.getElementById('expList');
+            let items = props.items || [];
 
-            let assignEl = document.getElementById('expAssignee');
-            if (props.assigneeName) {
-                assignEl.style.display = 'flex';
-                assignEl.innerHTML = `<span style="display:inline-block; width:10px; height:10px; background:${props.assigneeColor}; border-radius:50%; margin-right:5px;"></span> ${props.assigneeName}`;
-            } else {
-                assignEl.style.display = 'none';
-            }
+            // Header Info
+            document.getElementById('expTitle').textContent = props.assigneeName || 'Unknown';
+            document.getElementById('expTitle').style.color = props.assigneeColor || '#333';
+            let dateStr = calEvent.start.toLocaleDateString('th-TH', { weekday: 'short', day: 'numeric', month: 'short' });
+            document.getElementById('expSubtitle').textContent = `${dateStr} • ${items.length} รายการ`;
 
-            let btnOrig = document.getElementById('expBtnOrig');
-            let finalOrig = props.originalLink || (s ? s.origLink : '');
-            if (finalOrig) { btnOrig.href = finalOrig; btnOrig.style.display = 'flex'; }
-            else { btnOrig.style.display = 'none'; }
+            listContainer.innerHTML = '';
 
-            let btnRT = document.getElementById('expBtnRT');
-            if (s && s.rtLink) { btnRT.href = s.rtLink; btnRT.innerHTML = '<i class="fa-solid fa-book-open"></i> ไป ReadToon'; }
-            else {
-                btnRT.href = `https://readtoon.com/?q=${encodeURIComponent(props.seriesName)}`;
-                btnRT.innerHTML = '<i class="fa-solid fa-magnifying-glass"></i> ค้นหาใน ReadToon';
-            }
+            items.forEach(item => {
+                let row = document.createElement('div');
+                row.className = 'exp-item-row';
 
-            document.getElementById('expBtnDel').onclick = () => {
-                if (confirm('ลบตอนนี้?')) { deleteEvent(selectedEventId); }
-            };
+                // Determine Links
+                let linkOrig = item.link || item.seriesOrig;
+                let linkRt = item.seriesRt || `https://readtoon.com/?q=${encodeURIComponent(item.displayTitle)}`;
+                let isRead = item.isRead;
 
-            let card = document.getElementById('expandedCard');
+                let html = `
+                    <div class="exp-item-header">
+                        <span style="${isRead ? 'text-decoration:line-through; color:#999;' : ''}">${item.displayTitle} #${item.chapter}</span>
+                        <div style="cursor:pointer;" onclick="toggleReadEvent('${item.id}', this)">
+                            ${isRead ? '<i class="fa-solid fa-square-check" style="color:#27ae60;"></i>' : '<i class="fa-regular fa-square" style="color:#ccc;"></i>'}
+                        </div>
+                    </div>
+                    <div class="exp-item-actions">
+                        ${linkOrig ? `<a href="${linkOrig}" target="_blank" class="btn-xxs bg-link"><i class="fa-solid fa-link"></i> ต้นฉบับ</a>` : ''}
+                        <a href="${linkRt}" target="_blank" class="btn-xxs bg-rt"><i class="fa-solid fa-book-open"></i> ReadToon</a>
+                        <button onclick="deleteEvent('${item.id}')" class="btn-xxs bg-del"><i class="fa-solid fa-trash"></i></button>
+                    </div>
+                `;
+                row.innerHTML = html;
+                listContainer.appendChild(row);
+            });
+
+
             let overlay = document.getElementById('expandOverlay');
             if (window.innerWidth > 768) {
                 let rect = element.getBoundingClientRect();
                 let top = rect.top + window.scrollY;
                 let left = rect.left + window.scrollX;
-                if (left + 320 > window.innerWidth) left = window.innerWidth - 340;
-                if (top + 250 > window.innerHeight) top = top - 200;
-                card.style.top = top + 'px';
-                card.style.left = left + 'px';
-                card.style.transform = 'none'; card.style.position = 'absolute';
-            } else { card.style.position = 'fixed'; }
-            card.style.display = 'flex'; overlay.style.display = 'block';
+
+                // Smart Positioning
+                if (left + 320 > window.innerWidth) left = rect.left + window.scrollX - 320;
+                if (left < 0) left = 10;
+
+                if (top + 400 > document.body.scrollHeight) top = top - 300;
+
+                container.style.top = top + 'px';
+                container.style.left = left + 'px';
+                container.style.transform = 'none';
+                container.style.position = 'absolute';
+            } else {
+                container.style.position = 'fixed';
+            }
+            container.style.display = 'flex'; overlay.style.display = 'block';
+        }
+
+        // Wrapper for toggle read in expanded view which needs to close or refresh card?
+        // Actually simple toggleRead re-renders calendar, so the card might disappear or content become stale.
+        // Let's make toggleReadEvent refresh the card if it's open, OR just refresh UI which closes card.
+        // Refreshing UI kills the card usually because elements are removed from DOM.
+        // Let's modify deleteEvent/toggleRead to try to keep card open if possible, or just accept it closes.
+        // Users can re-open.
+
+        async function toggleReadEvent(id, btnEl) {
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
+            let e = events.find(x => x.id === id);
+            if (e) {
+                e.isRead = !e.isRead;
+
+                // Update UI in Card immediately
+                if (btnEl) {
+                    btnEl.innerHTML = e.isRead ?
+                        '<i class="fa-solid fa-square-check" style="color:#27ae60;"></i>' :
+                        '<i class="fa-regular fa-square" style="color:#ccc;"></i>';
+
+                    let titleEl = btnEl.previousElementSibling;
+                    if (titleEl) {
+                        e.isRead ?
+                            (titleEl.style.textDecoration = 'line-through', titleEl.style.color = '#999') :
+                            (titleEl.style.textDecoration = 'none', titleEl.style.color = '');
+                    }
+                }
+
+                saveAll();
+                // If we want to keep card open, we'd need to find the new group element and re-open.
+                // For now, let it close, it's simpler. Or we can manually re-render the card content without closing?
+                // But saveAll() triggers refreshUI() which kills the calendar elements.
+            }
         }
 
         function closeExpandedCard() {
@@ -1332,19 +1552,9 @@
         }
 
         async function toggleRead(ev, id) {
-            ev.preventDefault(); ev.stopPropagation();
-
-            // Sync First (Optional for toggleRead but safer for concurrent access)
-            if (db) { try { await syncFromCloud(); } catch (e) { } }
-
-            let e = events.find(x => x.id === id);
-            if (e) {
-                e.isRead = !e.isRead;
-                saveAll();
-            } else {
-                showToast('รายการนี้ถูกลบไปแล้ว', 'error');
-                refreshUI(); // Refresh to remove the ghost item
-            }
+            // Legacy for single items if any exist, but new logic uses `toggleReadEvent` from card
+            if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+            toggleReadEvent(id);
         }
 
         function saveAll() {
