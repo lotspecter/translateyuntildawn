@@ -23,7 +23,7 @@
             --col-bg: #ecf0f1;
             --text-color: #000000;
             --page-nav-bg: #34495e;
-            --unpaid-color: #e74c3c;
+            --unpaid-color: #3c64e7;
             --paid-color: #27ae60;
             --font-main: 'Sarabun', sans-serif;
         }
@@ -819,7 +819,7 @@
             <div class="column" id="unpaid" ondrop="drop(event)" ondragover="allowDrop(event)"
                 ondragleave="leaveDrop(event)">
                 <div class="column-header unpaid">
-                    <span>❌ ยังไม่จ่าย (Unpaid)</span> <span class="task-count" id="cnt-unpaid">0</span>
+                    <span>✍️ มอบหมายงาน</span> <span class="task-count" id="cnt-unpaid">0</span>
                     <button class="btn-dark" style="font-size:0.7rem; margin-left:auto;"
                         onclick="toggleSort('unpaid')">Sort ↕️</button>
                 </div>
@@ -830,7 +830,7 @@
             <div class="column" id="topay" ondrop="drop(event)" ondragover="allowDrop(event)"
                 ondragleave="leaveDrop(event)">
                 <div class="column-header" style="background-color:#f39c12;">
-                    <span>⚠️ รอจ่าย (To Pay)</span> <span class="task-count" id="cnt-topay">0</span>
+                    <span>🆗 งานที่ทำเสร็จแล้ว</span> <span class="task-count" id="cnt-topay">0</span>
                     <button class="btn-dark" style="font-size:0.7rem; margin-left:auto;"
                         onclick="toggleSort('topay')">Sort ↕️</button>
                 </div>
