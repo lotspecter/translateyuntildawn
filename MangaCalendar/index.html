@@ -989,6 +989,8 @@
                     if (props.isGroup) {
                         let color = props.assigneeColor;
                         let name = props.assigneeName;
+                        let isAllRead = props.isAllRead; // Check if this group is the "Read" pile
+
                         let itemsHtml = props.items.map(item => {
                             let isRead = item.isRead;
                             let readClass = isRead ? 'read' : '';
@@ -1004,10 +1006,13 @@
                             `;
                         }).join('');
 
+                        // Visual distinction for Read group
+                        let frameStyle = isAllRead ? `opacity:0.6; filter:grayscale(30%);` : '';
+
                         let html = `
-                            <div class="assignee-group-frame" style="border-color:${color};">
+                            <div class="assignee-group-frame" style="border-color:${color}; ${frameStyle}">
                                 <div class="assignee-header" style="background:${color};">
-                                    <span>${name}</span>
+                                    <span>${name} ${isAllRead ? '(Completed)' : ''}</span>
                                     <span style="font-size:0.7rem; background:rgba(0,0,0,0.2); padding:1px 4px; border-radius:10px;">${props.items.length}</span>
                                 </div>
                                 <div class="group-items-list">
@@ -1052,16 +1057,20 @@
                 };
             });
 
-            // 3. Group by Date + Assignee
+            // 3. Group by Date + Assignee + ReadStatus
             let groups = {};
             rawEvents.forEach(e => {
-                let key = `${e.start}_${e.assigneeId || 'none'}`;
+                // Key now includes isRead status to split frames
+                let readStatus = e.isRead ? 'read' : 'unread';
+                let key = `${e.start}_${e.assigneeId || 'none'}_${readStatus}`;
+
                 if (!groups[key]) {
                     groups[key] = {
                         start: e.start,
                         assigneeId: e.assigneeId,
                         assigneeName: e.assigneeName,
                         assigneeColor: e.assigneeColor,
+                        isAllRead: e.isRead,
                         items: []
                     };
                 }
@@ -1071,7 +1080,7 @@
             // 4. Convert Groups to FullCalendar Events
             return Object.values(groups).map(g => {
                 return {
-                    id: `g_${g.start}_${g.assigneeId}`,
+                    id: `g_${g.start}_${g.assigneeId}_${g.isAllRead ? 'R' : 'U'}`,
                     start: g.start,
                     title: g.assigneeName, // Not visible but good for a11y
                     backgroundColor: 'transparent',
@@ -1080,6 +1089,7 @@
                         isGroup: true,
                         assigneeName: g.assigneeName,
                         assigneeColor: g.assigneeColor,
+                        isAllRead: g.isAllRead,
                         items: g.items
                     }
                 };
@@ -1371,7 +1381,10 @@
 
             listContainer.innerHTML = '';
 
-            items.forEach(item => {
+            let unreadItems = items.filter(i => !i.isRead);
+            let readItems = items.filter(i => i.isRead);
+
+            const appendItem = (item) => {
                 let row = document.createElement('div');
                 row.className = 'exp-item-row';
 
@@ -1399,7 +1412,17 @@
                 `;
                 row.innerHTML = html;
                 listContainer.appendChild(row);
-            });
+            };
+
+            unreadItems.forEach(appendItem);
+
+            if (unreadItems.length > 0 && readItems.length > 0) {
+                let sep = document.createElement('div');
+                sep.style.cssText = "margin:10px 0; border-top:1px dashed #ddd; position:relative; height:1px;";
+                listContainer.appendChild(sep);
+            }
+
+            readItems.forEach(appendItem);
 
 
             let overlay = document.getElementById('expandOverlay');
