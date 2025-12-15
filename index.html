@@ -353,6 +353,58 @@
             text-shadow: 0 0 15px rgba(189, 0, 255, 0.7);
         }
 
+
+        /* --- Search Bar --- */
+        .search-container {
+            display: flex;
+            justify-content: center;
+            margin: 0 auto 30px auto;
+            max-width: 600px;
+            padding: 0 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        .search-box {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(189, 0, 255, 0.3);
+            border-radius: 50px;
+            padding: 12px 25px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            backdrop-filter: blur(8px);
+            transition: 0.3s;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        .search-box:focus-within {
+            border-color: var(--neon-purple);
+            box-shadow: 0 0 25px rgba(189, 0, 255, 0.3);
+            background: rgba(10, 5, 20, 0.8);
+        }
+
+        .search-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: #fff;
+            font-family: 'Kanit', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 400;
+        }
+
+        .search-input::placeholder {
+            color: rgba(255, 255, 255, 0.4);
+        }
+
+        .search-icon {
+            color: var(--neon-purple);
+            font-size: 1.2rem;
+        }
+
         /* --- Tabs --- */
         .tabs-container {
             display: flex;
@@ -437,12 +489,12 @@
         @keyframes cardAppear {
             0% {
                 opacity: 0;
-                transform: translateY(30px) scale(0.95);
+                transform: translateY(20px);
             }
 
             100% {
                 opacity: 1;
-                transform: translateY(0) scale(1);
+                transform: translateY(0);
             }
         }
 
@@ -744,6 +796,8 @@
         </div>
     </a>
 
+
+
     <div class="tabs-container" id="tabs-menu" style="display:none;">
         <button class="tab-btn active" onclick="switchTab('ongoing')">
             <img class="img-tab"
@@ -756,7 +810,13 @@
             จบแล้ว
         </button>
     </div>
-
+    <div class="search-container">
+        <div class="search-box">
+            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+            <input type="text" id="search-input" class="search-input" placeholder="ค้นหาชื่อเรื่อง..."
+                oninput="handleSearch(this.value)">
+        </div>
+    </div>
     <div class="container">
         <div id="loading"><i class="fa-solid fa-circle-notch fa-spin"></i> Loading...</div>
 
@@ -787,6 +847,24 @@
                 if (!response.ok) throw new Error('Network error');
                 const jsonData = await response.json();
 
+                // Compare with cache to see if chapters actually changed
+                if (cachedData) {
+                    const oldCache = JSON.parse(cachedData);
+                    const oldMap = new Map();
+                    oldCache.forEach(item => oldMap.set(item.title, item));
+
+                    jsonData.forEach(newItem => {
+                        if (oldMap.has(newItem.title)) {
+                            const oldItem = oldMap.get(newItem.title);
+                            // If title matches and chapter is the same, keep the OLD timestamp
+                            // This prevents items from jumping to the top if only the timestamp changed in the sheet
+                            if (oldItem.chapter === newItem.chapter) {
+                                newItem.timestamp = oldItem.timestamp;
+                            }
+                        }
+                    });
+                }
+
                 if (JSON.stringify(jsonData) !== cachedData) {
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(jsonData));
                     processAndRender(jsonData);
@@ -799,8 +877,10 @@
             }
         }
 
+        let g_allMangaData = [];
+
         function processAndRender(jsonData) {
-            const formattedData = jsonData.map(item => {
+            g_allMangaData = jsonData.map(item => {
                 const linksArray = item.links ? item.links.split(',').map(l => l.trim()).filter(l => l) : [];
                 const titleFormatted = item.title.replace(/\\n/g, '<br>').replace(/\n/g, '<br>');
                 const ts = parseTimestamp(item.timestamp);
@@ -809,7 +889,23 @@
                     chapter: item.chapter, status: item.status ? item.status.toLowerCase() : '', timestamp: ts
                 };
             });
-            renderPage(formattedData);
+            renderPage([...g_allMangaData]);
+        }
+
+        function handleSearch(query) {
+            const lowerQuery = query.toLowerCase().trim();
+            if (!lowerQuery) {
+                renderPage([...g_allMangaData]);
+                return;
+            }
+
+            const filtered = g_allMangaData.filter(item => {
+                // remove <br> for clean matching
+                const cleanTitle = item.title.replace(/<br>/g, ' ').toLowerCase();
+                return cleanTitle.includes(lowerQuery);
+            });
+
+            renderPage(filtered);
         }
 
         function parseTimestamp(val) {
