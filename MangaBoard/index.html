@@ -139,6 +139,13 @@
             background: none;
         }
 
+        input[type="checkbox"].bulk-chk {
+            width: 16px;
+            height: 16px;
+            accent-color: #f39c12;
+            cursor: pointer;
+        }
+
         button {
             padding: 8px 15px;
             border: none;
@@ -711,6 +718,35 @@
         </div>
     </div>
 
+    <!-- Bulk Payment Modal -->
+    <div id="bulkPaymentModal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-title">📦 จ่ายเงินหลายรายการ (Bulk Pay)</div>
+            <div id="bulkPreview"
+                style="max-height:150px; overflow-y:auto; font-size:0.85rem; background:#f4f4f4; padding:10px; margin-bottom:10px; border-radius:5px;">
+            </div>
+
+            <p id="bulkTotalLabel" style="font-weight:bold; font-size:1.1rem; text-align:right; margin-bottom:10px;">
+                ยอดรวม: 0 บาท</p>
+
+            <label>เลือกคนจ่าย:</label>
+            <select id="bulkSelectPayer" style="width:100%; margin-bottom:10px; padding:10px;"></select>
+
+            <label>รหัสผ่าน (Code):</label>
+            <input type="password" id="bulkInputCode" placeholder="ใส่รหัสของคนจ่าย..."
+                style="width:100%; margin-bottom:5px; padding:10px; box-sizing:border-box; border:1px solid #3498db;">
+
+            <label style="margin-top:10px; font-weight:bold;">📸 แนบสลีป (Slip):</label>
+            <input type="file" id="bulkInputSlip" accept="image/*" style="margin-bottom:15px; width:100%;">
+
+            <div style="display:flex; gap:10px;">
+                <button class="btn-green" onclick="confirmBulkPayment()">ยืนยัน & จ่ายรวม</button>
+                <button class="btn-dark"
+                    onclick="document.getElementById('bulkPaymentModal').style.display='none'">ยกเลิก</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Summary Modal (Integrated & Filtered) -->
     <div id="summaryModal" class="modal-overlay">
         <div class="modal-box" style="max-width:1100px;">
@@ -839,7 +875,12 @@
             <div class="column" id="topay" ondrop="drop(event)" ondragover="allowDrop(event)"
                 ondragleave="leaveDrop(event)">
                 <div class="column-header" style="background-color:#f39c12;">
-                    <span>🆗 งานที่ทำเสร็จแล้ว</span> <span class="task-count" id="cnt-topay">0</span>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <span>🆗 งานที่ทำเสร็จแล้ว</span>
+                        <button class="btn-dark" style="font-size:0.7rem; padding: 2px 5px;"
+                            onclick="openBulkPayModal()">💰 จ่ายรวม</button>
+                    </div>
+                    <span class="task-count" id="cnt-topay">0</span>
                     <button class="btn-dark" style="font-size:0.7rem; margin-left:auto;"
                         onclick="toggleSort('topay')">Sort ↕️</button>
                 </div>
@@ -1571,7 +1612,10 @@
                         ${delBtn}
                         ${assigneeHtml}
                         <div class="note-header">
-                            <h3>${t.title} #${t.chapter}</h3>
+                            <div style="display:flex; align-items:center;">
+                                ${status === 'topay' ? `<input type="checkbox" class="bulk-chk" value="${t.id}" style="margin-right:8px; transform:scale(1.2); cursor:pointer;" onclick="event.stopPropagation()">` : ''}
+                                <h3>${t.title} #${t.chapter}</h3>
+                            </div>
                             <button class="btn-icon" onclick="sendDiscordWebhook(tasks.find(x=>x.id=='${t.id}'), '${status}')" title="Send to Discord"><i class="fa-brands fa-discord"></i></button>
                         </div>
                         <div style="font-size:0.75rem; color:#666; margin-bottom:5px;">🕒 ${new Date(t.createdAt).toLocaleString('th-TH', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
@@ -1957,6 +2001,169 @@
                 } catch (err) { alert("Error"); }
             };
             r.readAsText(inp.files[0]); inp.value = '';
+        }
+
+        // --- Bulk Payment System ---
+        function openBulkPayModal() {
+            const chks = document.querySelectorAll('.bulk-chk:checked');
+            if (chks.length === 0) return alert("กรุณาติ๊กเลือกงานที่จะจ่ายอย่างน้อย 1 งาน");
+
+            // Aggregate Data
+            const selectedTasks = [];
+            let totalPrice = 0;
+
+            chks.forEach(chk => {
+                const t = tasks.find(x => x.id === chk.value);
+                if (t) {
+                    selectedTasks.push(t);
+                    totalPrice += calculatePrice(t);
+                }
+            });
+
+            // Render Preview
+            const previewEl = document.getElementById('bulkPreview');
+            previewEl.innerHTML = selectedTasks.map(t => `<div>- ${t.title} #${t.chapter} (${calculatePrice(t)})</div>`).join('');
+
+            document.getElementById('bulkTotalLabel').innerText = `ยอดรวม: ${totalPrice.toLocaleString()} บาท`;
+
+            // Fill Payer Select
+            const sel = document.getElementById('bulkSelectPayer');
+            sel.innerHTML = '<option value="">-- เลือกคนจ่าย --</option>';
+            payers.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id; opt.textContent = p.name;
+                sel.appendChild(opt);
+            });
+
+            // Clear Inputs
+            document.getElementById('bulkInputCode').value = '';
+            document.getElementById('bulkInputSlip').value = '';
+
+            document.getElementById('bulkPaymentModal').style.display = 'flex';
+        }
+
+        async function confirmBulkPayment() {
+            // 1. Validate
+            const payerId = document.getElementById('bulkSelectPayer').value;
+            const code = document.getElementById('bulkInputCode').value;
+            const slipFile = document.getElementById('bulkInputSlip').files[0];
+
+            if (!payerId) return alert("เลือกคนจ่าย");
+
+            const payer = payers.find(p => p.id === payerId);
+            if (!payer) return alert("ไม่พบข้อมูลคนจ่าย");
+
+            if (payer.code !== code) return alert("รหัสผ่านผิด!");
+
+            // 2. Sync
+            if (db) { try { await syncFromCloud(); } catch (e) { } }
+
+            // 3. Process Items
+            const chks = document.querySelectorAll('.bulk-chk:checked');
+            const processedTasks = [];
+            let totalPrice = 0;
+
+            // Use current tasks state after sync
+            chks.forEach(chk => {
+                const t = tasks.find(x => x.id === chk.value);
+                if (t && t.status === 'topay') { // Double check status
+                    t.status = 'paid';
+                    t.payerId = payerId;
+                    t.paidAt = new Date().toISOString();
+                    processedTasks.push(t);
+                    totalPrice += calculatePrice(t);
+                }
+            });
+
+            if (processedTasks.length === 0) return alert("No tasks to pay?");
+
+            autoSave();
+            renderTasks();
+            document.getElementById('bulkPaymentModal').style.display = 'none';
+
+            // 4. Send Webhook
+            await sendBulkDiscordWebhook(processedTasks, totalPrice, payer, slipFile);
+            showToast("จ่ายเงินรวมเรียบร้อย!");
+        }
+
+        async function sendBulkDiscordWebhook(taskList, total, payer, file) {
+            const url = cloudConfig.webhookPaid;
+            if (!url) return;
+
+            // Group by Title
+            const grouped = {};
+            taskList.forEach(t => {
+                if (!grouped[t.title]) grouped[t.title] = [];
+                grouped[t.title].push(t.chapter);
+            });
+
+            // Format Lists
+            // * free Haram ตอนที่ 16 , 17
+            let descLines = [];
+            for (const [title, chapters] of Object.entries(grouped)) {
+                const mergedChaps = mergeChapters(chapters);
+                descLines.push(`  * ${title} ตอนที่ ${mergedChaps}`);
+            }
+
+            const payerTag = (payer.discordId) ? `<@${payer.discordId}>` : payer.name;
+
+            const content = `> **จ่ายแล้ว**\n${descLines.join('\n')}\n> ยอดรวม ${total.toLocaleString()} บาท\n> ${payerTag}`;
+
+            const payload = {
+                content: content,
+                allowedMentions: { users: [payer.discordId] }
+            };
+
+            try {
+                if (file) {
+                    const formData = new FormData();
+                    formData.append('payload_json', JSON.stringify(payload));
+                    formData.append('file', file);
+                    await fetch(url, { method: 'POST', body: formData });
+                } else {
+                    await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                }
+            } catch (e) { console.error(e); }
+        }
+
+        function mergeChapters(chapList) {
+            // 1. Expand ranges (1-3 -> 1,2,3)
+            let nums = new Set();
+            chapList.forEach(c => {
+                if (c.includes('-')) {
+                    const [s, e] = c.split('-').map(Number);
+                    for (let i = s; i <= e; i++) nums.add(i);
+                } else {
+                    nums.add(parseFloat(c));
+                }
+            });
+
+            const sorted = Array.from(nums).sort((a, b) => a - b);
+            if (sorted.length === 0) return chapList.join(', ');
+
+            // 2. Group back to ranges
+            let ranges = [];
+            if (sorted.length > 0) {
+                let start = sorted[0];
+                let prev = sorted[0];
+
+                for (let i = 1; i < sorted.length; i++) {
+                    if (sorted[i] === prev + 1) {
+                        prev = sorted[i];
+                    } else {
+                        ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+                        start = sorted[i];
+                        prev = sorted[i];
+                    }
+                }
+                ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+            }
+
+            return ranges.join(' , ');
         }
 
         function showToast(message, type = 'success') {
