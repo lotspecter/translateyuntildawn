@@ -746,6 +746,45 @@
             }
 
         }
+
+        /* --- ✨ NEW BADGE ✨ --- */
+        .new-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: linear-gradient(135deg, #ff0055, #ff4081);
+            color: white;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            font-weight: 800;
+            border-radius: 4px;
+            box-shadow: 0 0 15px rgba(255, 0, 85, 0.6);
+            z-index: 15;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            animation: pulse-red 2s infinite;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        @keyframes pulse-red {
+            0% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 85, 0.7);
+                transform: scale(1);
+            }
+
+            50% {
+                transform: scale(1.05);
+            }
+
+            70% {
+                box-shadow: 0 0 0 10px rgba(255, 0, 85, 0);
+            }
+
+            100% {
+                box-shadow: 0 0 0 0 rgba(255, 0, 85, 0);
+                transform: scale(1);
+            }
+        }
     </style>
 </head>
 
@@ -1021,10 +1060,16 @@
                     });
                 }
 
+                // 🔥 Logic สำหรับ badge NEW 🔥
+                // ถ้าอัพเดทภายใน 24 ชม. ให้ขึ้น NEW
+                const isNew = (Date.now() - item.timestamp) < (24 * 60 * 60 * 1000);
+                const newBadgeHtml = isNew ? '<div class="new-badge">ตอนใหม่</div>' : '';
+
                 const cardHtml = `
                     <div class="manga-card" onclick="toggleCard(this)" style="animation-delay: ${delay}s">
                         <div class="card-header"><div class="manga-title">${item.title}</div></div>
                         <div class="img-wrapper">
+                            ${newBadgeHtml}
                             <img src="${item.image}" alt="${item.title}" loading="lazy">
                             <div class="hover-overlay">${buttonsHtml}</div>
                         </div>
