@@ -1019,6 +1019,11 @@
                     isCompleted = true;
                     delay = completedCount * 0.05;
                     completedCount++;
+                } else if (/^s\d+$/.test(item.status)) {
+                    const seasonNum = item.status.substring(1);
+                    badgeHtml = `<div class="status-badge status-end"><i class="fa-solid fa-flag-checkered"></i> จบซีซั่น ${seasonNum} | ตอนที่ ${item.chapter}</div>`;
+                    delay = ongoingCount * 0.05;
+                    ongoingCount++;
                 } else if (item.status.includes('update') || item.status.includes('อัพเดท')) {
                     badgeHtml = `<div class="status-badge status-catchup"><i class="fa-solid fa-bolt"></i> ชนต้นฉบับตอนที่ ${item.chapter}</div>`;
                     delay = ongoingCount * 0.05;
