@@ -835,16 +835,17 @@
     <div id="addModal" class="modal-overlay">
         <div class="modal-box">
             <div class="modal-title">เพิ่มตอนใหม่ 📅</div>
+
+            <label style="display:block; margin-bottom:5px;">ผู้รับผิดชอบ:</label>
+            <select id="addAssigneeSelect" style="width:100%; margin-bottom:10px; padding:10px;">
+                <option value="">-- ไม่ระบุ --</option>
+            </select>
+
             <label style="display:block; margin-bottom:5px;">เลือกเรื่อง:</label>
             <select id="addSeriesSelect" style="width:100%; margin-bottom:10px; padding:10px;"></select>
 
             <input type="text" id="addEpNum" placeholder="เช่น 105"
                 style="width:100%; margin-bottom:15px; padding:10px;">
-
-            <label style="display:block; margin-bottom:5px;">ผู้รับผิดชอบ:</label>
-            <select id="addAssigneeSelect" style="width:100%; margin-bottom:15px; padding:10px;">
-                <option value="">-- ไม่ระบุ --</option>
-            </select>
 
             <div style="display:flex; gap:10px;">
                 <button class="btn btn-add" style="flex:1;" onclick="confirmAddEvent()">บันทึก</button>
@@ -1299,43 +1300,69 @@
 
         // --- Other Logics ---
         function openAddModal() {
-            let sel = document.getElementById('addSeriesSelect');
-            sel.innerHTML = '';
-            let currentSeries = series.filter(s => s.pageId === currentPageId);
-            if (currentSeries.length === 0) { showToast('กรุณาสร้างเรื่องก่อนครับ', 'error'); return; }
-            currentSeries.forEach(s => {
-                let opt = document.createElement('option');
-                opt.value = s.id; opt.textContent = s.name;
-                sel.appendChild(opt);
-            });
+            let selSeries = document.getElementById('addSeriesSelect');
+            let selAssignee = document.getElementById('addAssigneeSelect');
 
-            let selAss = document.getElementById('addAssigneeSelect');
-            selAss.innerHTML = '<option value="">-- ไม่ระบุ --</option>';
+            // 1. Populate Assignees First
+            selAssignee.innerHTML = '<option value="">-- ไม่ระบุ (แสดงทั้งหมด) --</option>';
             assignees.forEach(a => {
                 let opt = document.createElement('option');
                 opt.value = a.id; opt.textContent = a.name;
-                selAss.appendChild(opt);
+                selAssignee.appendChild(opt);
             });
 
-            // Auto-select assignee logic
-            sel.onchange = () => {
-                let s = series.find(x => x.id === sel.value);
-                if (s && s.defaultAssigneeId) {
-                    selAss.value = s.defaultAssigneeId;
+            // 2. Helper to populate series based on filter
+            const renderSeriesOptions = (filterAssigneeId) => {
+                selSeries.innerHTML = '';
+                let currentSeries = series.filter(s => s.pageId === currentPageId);
+
+                // Filter logic
+                if (filterAssigneeId) {
+                    currentSeries = currentSeries.filter(s => s.defaultAssigneeId === filterAssigneeId);
+                }
+
+                if (currentSeries.length === 0) {
+                    let opt = document.createElement('option');
+                    opt.textContent = "ไม่มีรายชื่อเรื่อง";
+                    selSeries.appendChild(opt);
                 } else {
-                    selAss.value = "";
+                    currentSeries.forEach(s => {
+                        let opt = document.createElement('option');
+                        opt.value = s.id; opt.textContent = s.name;
+                        selSeries.appendChild(opt);
+                    });
                 }
             };
 
-            // Trigger once for initial series
-            if (sel.value) {
-                let s = series.find(x => x.id === sel.value);
-                if (s && s.defaultAssigneeId) selAss.value = s.defaultAssigneeId;
-            }
+            // Initial render (Show all)
+            renderSeriesOptions("");
+
+            // 3. Event Listeners
+            // When Assignee changes -> Filter Series
+            selAssignee.onchange = () => {
+                renderSeriesOptions(selAssignee.value);
+            };
+
+            // When Series changes -> Auto-select Assignee (only if not currently filtered strictly?)
+            // If user filtered by 'John', selecting 'One Piece' (John) won't change anything.
+            // If user selects 'All', selecting 'One Piece' (John) will set Assignee to John.
+            // BUT setting Assignee to John via JS does NOT trigger onchange, so the list won't shrink unexpectedly.
+            selSeries.onchange = () => {
+                let s = series.find(x => x.id === selSeries.value);
+                if (s && s.defaultAssigneeId) {
+                    selAssignee.value = s.defaultAssigneeId;
+                } else {
+                    // selAssignee.value = ""; // Don't reset if not found, keep current selection? Or reset?
+                    // User might have manually set assignee. Let's leave it unless we want strict binding.
+                }
+            };
 
             document.getElementById('addEpNum').value = '';
             document.getElementById('addModal').style.display = 'flex';
-            document.getElementById('addEpNum').focus();
+
+            // Focus on Assignee check or Series?
+            // User requested Assignee first.
+            // document.getElementById('addAssigneeSelect').focus(); 
         }
 
         async function confirmAddEvent() {
