@@ -2055,17 +2055,23 @@
 
             if (payer.code !== code) return alert("รหัสผ่านผิด!");
 
+            // Capture Selected IDs BEFORE Sync (because sync calls renderTasks -> destroys checkboxes)
+            const chks = document.querySelectorAll('.bulk-chk:checked');
+            const selectedIds = Array.from(chks).map(c => c.value);
+
+            if (selectedIds.length === 0) return alert("ไม่ได้เลือกงาน (No tasks selected)");
+
             // 2. Sync
             if (db) { try { await syncFromCloud(); } catch (e) { } }
 
             // 3. Process Items
-            const chks = document.querySelectorAll('.bulk-chk:checked');
+            // const chks = document.querySelectorAll('.bulk-chk:checked'); // <- OLD BUGGY WAY
             const processedTasks = [];
             let totalPrice = 0;
 
             // Use current tasks state after sync
-            chks.forEach(chk => {
-                const t = tasks.find(x => x.id === chk.value);
+            selectedIds.forEach(id => {
+                const t = tasks.find(x => x.id === id);
                 if (t && t.status === 'topay') { // Double check status
                     t.status = 'paid';
                     t.payerId = payerId;
@@ -2075,7 +2081,7 @@
                 }
             });
 
-            if (processedTasks.length === 0) return alert("No tasks to pay?");
+            if (processedTasks.length === 0) return alert("No tasks to pay? (Tasks might have been moved or deleted remotely)");
 
             autoSave();
             renderTasks();
